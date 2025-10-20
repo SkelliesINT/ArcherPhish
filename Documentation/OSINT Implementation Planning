@@ -1,0 +1,38 @@
+OSINT Modifiers for AI Prompt specification. 
+
+- Name:
+  -- First and Last
+  -- Likely as seperate entities depending on how the prompt uses the modifiers 
+- Position: 
+  -- Position Title
+- Family:
+  -- Spouse
+  -- Children
+  -- Pets
+-Professional Affiliations:
+  -- College
+  -- Military 
+-Personal Affiliations:
+  -- Gym Membership
+  -- Club Membership
+
+
+-- Considerations -- 
+
+Without modifiers that are specific to each entity, it's pretty easy because we can prompt the AI to create 
+a few emails then send them out in bulk mail batches to recipients. This is easy and quick; however, with 
+OSINT modifiers each email recipient would need a prompt for each specific email. A couple solutions come to mind.
+ 
+1) We prompt the AI to give us prompts with placeholders ([First Name] [Last name]), then we handle the 
+placeholder replacement text on our side with the modifiers. This keeps the queries minimal, but requires 
+us to develop the placeholder replacement.
+ 
+2) We segment out who will be receiving modified emails. We could do this for C-Suite, etc.. This would 
+require only a handful of queries for the a select number, while the rest of recipients receive general 
+non specific emails from a few general queries. 
+ 
+3) We do custom AI queries for every recipient.. I find this problematic. if the org is only 10-30, not 
+terrible. But if the org is 100 plus, this is perhaps a lot of queries and more time intensive. The viability 
+of this would likely depend on what our query limit would be from the provider. I don't love this idea, but it 
+takes all of the work off our plate of doing placeholder replacements and how to handle placeholder replacement 
+when some recipients might have 5 modifiers [name, college, gym membership, etc] and others only have 1 [name].
