@@ -1,0 +1,9 @@
+.login-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background-color: #20232a;
+  color: #61dafb;
+  font-size: 2rem;
+}

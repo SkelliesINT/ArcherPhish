@@ -1,0 +1,9 @@
+.dashboard-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background-color: #f4f4f4;
+  color: #333;
+  font-size: 2rem;
+}
