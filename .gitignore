@@ -13,3 +13,8 @@ Thumbs.db
 # Build outputs
 dist/
 build/
+
+backend/data
+.env
+
+backend/.env
