@@ -47,6 +47,22 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
+// Endpoint to add a recipient
+app.post("/api/recipients", (req, res) => {
+  const { email } = req.body;
+
+  if (!email) return res.status(400).json({ error: "Email is required" });
+
+  const sql = "INSERT INTO recipients (email) VALUES (?)";
+  db.query(sql, [email], (err, result) => {
+    if (err) {
+      console.error("Failed to add recipient:", err);
+      return res.status(500).json({ error: "Failed to add recipient" });
+    }
+    res.status(201).json({ message: "Recipient added", id: result.insertId });
+  });
+});
+
 // Login endpoint
 app.post('/api/login', (req, res) => {
   const { email, password } = req.body;
