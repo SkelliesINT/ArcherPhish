@@ -6,6 +6,9 @@ const mysql = require('mysql2');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
+const registerAIGenerateRoute = require('./aiGenerate');
+const registerSendCampaignRoute = require('./sendCampaign');
+
 const app = express();
 const PORT = process.env.PORT || 4000;
 
@@ -101,5 +104,7 @@ app.get('/api/dashboard', (req, res) => {
     res.status(401).json({ error: 'Invalid token' });
   }
 });
+registerAIGenerateRoute(app);
+registerSendCampaignRoute(app, db);
 
 app.listen(PORT, () => console.log(`🚀 Backend running on http://localhost:${PORT}`));
