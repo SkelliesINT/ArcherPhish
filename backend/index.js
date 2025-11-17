@@ -8,6 +8,9 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
+const registerAIGenerateRoute = require('./aiGenerate');
+const registerSendCampaignRoute = require('./sendCampaign');
+
 const app = express();
 const PORT = process.env.PORT || 4000;
 
@@ -211,5 +214,8 @@ app.get('/api/analytics/:linkId', (req, res) => {
 app.get('/api/links', (req, res) => { res.json(loadLinks()); });
 // ------------------------------
 // === END ADDED BY ZACH ===
+
+registerAIGenerateRoute(app);
+registerSendCampaignRoute(app, db);
 
 app.listen(PORT, () => console.log(`🚀 Backend running on http://localhost:${PORT}`));
