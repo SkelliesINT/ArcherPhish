@@ -200,3 +200,12 @@ body{
   gap: 12px;
   margin-top: 16px;
 }
+
+.ap-page {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh; /* full screen height */
+  width: 100%;
+  background: linear-gradient(180deg, #07080a 0%, #0d0f13 100%);
+}

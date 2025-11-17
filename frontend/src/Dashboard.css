@@ -1,9 +1,223 @@
-.dashboard-page {
+/* ---------------------------
+   Full Browser Layout
+--------------------------- */
+.dashboard-container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;          /* container spans viewport width */
+  background: #101014;
+  color: #e8eef1;
+  font-family: "Arial", sans-serif;
+}
+
+/* ---------------------------
+   Sidebar
+--------------------------- */
+.sidebar {
+  height: 100%;
+  width: 80px;
+  background: #151519;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding-top: 20px;
+  padding-left: 0;
+  transition: width 0.3s ease;
+  position: relative;
+  box-shadow: 1px 0 10px black;
+  overflow: hidden;
+}
+
+.sidebar:hover {
+  width: 200px;
+}
+
+/* Sidebar logo */
+.sidebar-logo {
   display: flex;
   align-items: center;
-  justify-content: center;
-  height: 100vh;
-  background-color: #f4f4f4;
-  color: #333;
-  font-size: 2rem;
+  justify-content: flex-start;
+  width: 100%;
+  padding-left: 20px;
+  overflow: hidden;
+  position: relative;
+  border-bottom: 3px solid #101014;
+}
+
+.logo-part1 {
+  width: 50px;
+  height: auto;
+  flex-shrink: 0;
+  padding-bottom: 50px;
+  transition: width 0.3s ease;
+}
+
+.logo-part2 {
+  width: 0;
+  height: auto;
+  margin-left: 12px;
+  transform: translateX(-50px);
+  opacity: 0;
+  flex-shrink: 0;
+  padding-bottom: 30px;
+  transition: width 0.3s ease, opacity 0.3s ease, transform 0.5s ease;
+}
+
+.sidebar:hover .logo-part2 {
+  width: 110px;
+  margin-left: 1px;
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* Sidebar items */
+.sidebar-icons,
+.sidebar-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+.sidebar-bottom {
+  margin-top: auto;
+  margin-bottom: 20px;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  padding: 15px 25px 15px 25px;
+  margin-bottom: -20px;
+  width: fit-content;
+  box-sizing: border-box;
+  border-bottom: 3px solid #101014;
+  border-radius: 8px;
+  transition: background 0.2s ease, width 0.3s ease;
+  position: relative;
+}
+
+.sidebar-item:hover {
+  background: linear-gradient(
+    to right,
+    rgba(0, 0, 0, 0.164) 0%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
+
+.sidebar-item .label {
+  opacity: 0;
+  white-space: nowrap;
+  margin-left: 8px; 
+  transform: translateX(-50px);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.5s ease;
+}
+
+.sidebar:hover .sidebar-item {
+  width: 100%; /* expand with text */
+}
+
+.sidebar:hover .sidebar-item .label {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* Icon styling */
+.icon {
+  font-size: 30px;
+  color: #bdbdbd;
+  flex-shrink: 0;
+}
+
+.sidebar:hover .icon {
+
+
+}
+
+/* ---------------------------
+   Main Content
+--------------------------- */
+.dashboard-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 40px;
+  overflow-y: auto;
+}
+
+.dashboard-main > * {
+  width: 100%; /* stretch children to full width */
+}
+
+/* Headings & message */
+.dashboard-main h1 {
+  margin-bottom: 20px;
+}
+
+.dashboard-message {
+  margin-bottom: 30px;
+  color: #dffcff;
+}
+
+/* ---------------------------
+   Add Email Section
+--------------------------- */
+.add-email-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+  width: 100%;
+}
+
+.add-email-input {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.add-email-input input {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.03);
+  color: #e8eef1;
+}
+
+.add-email-input button {
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #00e5ff;
+  color: #101014;
+  border: none;
+  cursor: pointer;
+}
+
+/* Success & error messages */
+.success {
+  color: #66ff99;
+}
+
+.error {
+  color: #ff9a9a;
+}
+
+/* ---------------------------
+   Buttons
+--------------------------- */
+.ap-button {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 10px;
+  background: #00e5ff;
+  color: #101014;
+  cursor: pointer;
+  margin-top: 10px;
+  width: 100%;
+  max-width: 300px; /* optional limit */
 }

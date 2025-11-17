@@ -4,6 +4,9 @@ const cors = require('cors');
 const mysql = require('mysql2');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -11,7 +14,9 @@ const PORT = process.env.PORT || 4000;
 app.use(cors({ origin: 'http://localhost:3000' }));
 app.use(express.json());
 
-// MySQL connection
+// ------------------------------
+// MySQL Connection
+// ------------------------------
 const db = mysql.createConnection({
   host: process.env.DB_HOST || '127.0.0.1',
   port: parseInt(process.env.DB_PORT || '3306', 10),
@@ -25,7 +30,9 @@ db.connect(err => {
   else console.log('✅ Connected to MySQL');
 });
 
-// Register endpoint
+// ------------------------------
+// User Registration
+// ------------------------------
 app.post('/api/register', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
@@ -47,30 +54,16 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
-// Endpoint to add a recipient
-app.post("/api/recipients", (req, res) => {
-  const { email } = req.body;
-
-  if (!email) return res.status(400).json({ error: "Email is required" });
-
-  const sql = "INSERT INTO recipients (email) VALUES (?)";
-  db.query(sql, [email], (err, result) => {
-    if (err) {
-      console.error("Failed to add recipient:", err);
-      return res.status(500).json({ error: "Failed to add recipient" });
-    }
-    res.status(201).json({ message: "Recipient added", id: result.insertId });
-  });
-});
-
-// Login endpoint
+// ------------------------------
+// User Login
+// ------------------------------
 app.post('/api/login', (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
 
   const sql = 'SELECT id, email, password FROM users WHERE email = ?';
   db.query(sql, [email], async (err, results) => {
-    if (err) return res.status(500).json({ error: 'Server error' });
+    if (err) return res.status(500).json({ error: 'Database error' });
     if (results.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
 
     const user = results[0];
@@ -87,7 +80,8 @@ app.post('/api/login', (req, res) => {
   });
 });
 
-// Example protected route
+// ------------------------------
+// Dashboard (protected)
 app.get('/api/dashboard', (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) return res.status(401).json({ error: 'Missing token' });
@@ -95,78 +89,91 @@ app.get('/api/dashboard', (req, res) => {
   const token = authHeader.split(' ')[1];
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'supersecretkey');
-    res.json({ message: 'Protected dashboard data', user: decoded });
+    res.json({ message: 'Welcome back!', user: decoded });
   } catch (err) {
     res.status(401).json({ error: 'Invalid token' });
   }
 });
 
+// ------------------------------
+// Recipients Table Endpoints
+// ------------------------------
 
+// Get all recipients
+app.post("/api/recipients", (req, res) => {
+  const { firstName, lastName, email } = req.body;
+
+  if (!email) return res.status(400).json({ error: "Email is required" });
+
+  const sql = "INSERT INTO recipients (first_name, last_name, email) VALUES (?, ?, ?)";
+  db.query(sql, [firstName || "", lastName || "", email], (err, result) => {
+    if (err) {
+      console.error("Failed to add recipient:", err);
+      return res.status(500).json({ error: "Failed to add recipient" });
+    }
+    res.json({
+      message: "Recipient added successfully",
+      recipient: { id: result.insertId, firstName, lastName, email },
+    });
+  });
+});
+
+// --- Get All Recipients ---
+app.get("/api/recipients", (req, res) => {
+  const sql = "SELECT id, first_name, last_name, email FROM recipients";
+  db.query(sql, (err, results) => {
+    if (err) return res.status(500).json({ error: "Failed to fetch recipients" });
+
+    // Map snake_case -> camelCase
+    const mapped = results.map((r) => ({
+      id: r.id,
+      firstName: r.first_name,
+      lastName: r.last_name,
+      email: r.email,
+    }));
+
+    res.json(mapped);
+  });
+});
+
+// --- Delete Recipient ---
+app.delete("/api/recipients/:id", (req, res) => {
+  const { id } = req.params;
+  const sql = "DELETE FROM recipients WHERE id = ?";
+  db.query(sql, [id], (err) => {
+    if (err) return res.status(500).json({ error: "Failed to delete recipient" });
+    res.json({ message: "Recipient removed" });
+  });
+});
+
+// ------------------------------
 // === ADDED BY ZACH: Link analytics (safe, local storage) ===
-const fs = require('fs');
-const path = require('path');
-const crypto = require('crypto');
-
-// Data directory & files
 const DATA_DIR = path.join(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
 
 const LINKS_FILE = path.join(DATA_DIR, 'links.json');
 const CLICKS_FILE = path.join(DATA_DIR, 'clicks.ndjson');
-
-// ensure files exist
 if (!fs.existsSync(LINKS_FILE)) fs.writeFileSync(LINKS_FILE, JSON.stringify({}), 'utf8');
 if (!fs.existsSync(CLICKS_FILE)) fs.writeFileSync(CLICKS_FILE, '', 'utf8');
 
-// helpers
-function saveLinks(obj) {
-  fs.writeFileSync(LINKS_FILE, JSON.stringify(obj, null, 2), 'utf8');
-}
-function loadLinks() {
-  try {
-    return JSON.parse(fs.readFileSync(LINKS_FILE, 'utf8') || '{}');
-  } catch (e) {
-    return {};
-  }
-}
-function appendClick(clickObj) {
-  const line = JSON.stringify(clickObj) + '\n';
-  fs.appendFile(CLICKS_FILE, line, err => {
-    if (err) console.error('Failed to write click:', err);
-  });
-}
-function genId(length = 6) {
-  return crypto.randomBytes(Math.ceil(length * 3 / 4)).toString('base64url').slice(0, length);
-}
-function hashIp(ip) {
-  return crypto.createHash('sha256').update(ip || '').digest('hex');
-}
-function getClientIp(req) {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (forwarded) return forwarded.split(',')[0].trim();
-  return req.socket.remoteAddress || '';
-}
+function saveLinks(obj) { fs.writeFileSync(LINKS_FILE, JSON.stringify(obj, null, 2), 'utf8'); }
+function loadLinks() { try { return JSON.parse(fs.readFileSync(LINKS_FILE, 'utf8') || '{}'); } catch { return {}; } }
+function appendClick(clickObj) { fs.appendFile(CLICKS_FILE, JSON.stringify(clickObj) + '\n', err => { if (err) console.error('Failed to write click:', err); }); }
+function genId(length = 6) { return crypto.randomBytes(Math.ceil(length * 3 / 4)).toString('base64url').slice(0, length); }
+function hashIp(ip) { return crypto.createHash('sha256').update(ip || '').digest('hex'); }
+function getClientIp(req) { const forwarded = req.headers['x-forwarded-for']; if (forwarded) return forwarded.split(',')[0].trim(); return req.socket.remoteAddress || ''; }
 
-// Create a new tracked link
-// POST /api/links
-// body: { url: "https://example.com", name?: "Campaign" }
+// Links endpoints
 app.post('/api/links', (req, res) => {
   const { url, name } = req.body;
   if (!url) return res.status(400).json({ error: 'url required' });
-
   const links = loadLinks();
   const id = genId(7);
-  links[id] = {
-    id,
-    url,
-    name: name || null,
-    createdAt: new Date().toISOString()
-  };
+  links[id] = { id, url, name: name || null, createdAt: new Date().toISOString() };
   saveLinks(links);
   res.json({ id, shortUrl: `/r/${id}`, target: url });
 });
 
-// Redirect endpoint that logs click then redirects
 app.get('/r/:linkId', (req, res) => {
   const { linkId } = req.params;
   const links = loadLinks();
@@ -177,58 +184,32 @@ app.get('/r/:linkId', (req, res) => {
   const ipHash = hashIp(ip);
   const ua = req.headers['user-agent'] || '';
   const ref = req.headers.referer || req.headers.referrer || null;
-
-  const click = {
-    linkId,
-    at: new Date().toISOString(),
-    ua,
-    ref,
-    ipHash
-  };
-
-  appendClick(click);
+  appendClick({ linkId, at: new Date().toISOString(), ua, ref, ipHash });
   res.redirect(302, link.url);
 });
 
-// Analytics: aggregated stats for a link
 app.get('/api/analytics/:linkId', (req, res) => {
   const { linkId } = req.params;
   const links = loadLinks();
   if (!links[linkId]) return res.status(404).json({ error: 'Link not found' });
 
   const data = fs.readFileSync(CLICKS_FILE, 'utf8').trim().split('\n').filter(Boolean);
-  const clicks = data.map(line => {
-    try { return JSON.parse(line); } catch { return null; }
-  }).filter(Boolean).filter(c => c.linkId === linkId);
+  const clicks = data.map(line => { try { return JSON.parse(line); } catch { return null; } }).filter(Boolean).filter(c => c.linkId === linkId);
 
-  const total = clicks.length;
-
-  // clicks per day
-  const perDay = {};
-  const uaCounts = {};
-  clicks.forEach(c => {
-    const day = c.at.slice(0, 10);
-    perDay[day] = (perDay[day] || 0) + 1;
-    const ua = c.ua || 'unknown';
-    uaCounts[ua] = (uaCounts[ua] || 0) + 1;
+  const perDay = {}, uaCounts = {};
+  clicks.forEach(c => { 
+    const day = c.at.slice(0,10); 
+    perDay[day] = (perDay[day]||0)+1; 
+    const ua = c.ua || 'unknown'; 
+    uaCounts[ua] = (uaCounts[ua]||0)+1; 
   });
 
   const uniqueIps = new Set(clicks.map(c => c.ipHash)).size;
-
-  res.json({
-    link: links[linkId],
-    totalClicks: total,
-    uniqueUsers: uniqueIps,
-    perDay,
-    uaCounts
-  });
+  res.json({ link: links[linkId], totalClicks: clicks.length, uniqueUsers: uniqueIps, perDay, uaCounts });
 });
 
-// List all links
-app.get('/api/links', (req, res) => {
-  res.json(loadLinks());
-});
+app.get('/api/links', (req, res) => { res.json(loadLinks()); });
+// ------------------------------
 // === END ADDED BY ZACH ===
-
 
 app.listen(PORT, () => console.log(`🚀 Backend running on http://localhost:${PORT}`));
