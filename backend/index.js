@@ -108,7 +108,7 @@ app.post("/api/recipients", (req, res) => {
 
   if (!email) return res.status(400).json({ error: "Email is required" });
 
-  const sql = "INSERT INTO recipients (first_name, last_name, email) VALUES (?, ?, ?)";
+  const sql = "INSERT INTO recipients (firstName, lastName, email) VALUES (?, ?, ?)";
   db.query(sql, [firstName || "", lastName || "", email], (err, result) => {
     if (err) {
       console.error("Failed to add recipient:", err);
@@ -123,15 +123,15 @@ app.post("/api/recipients", (req, res) => {
 
 // --- Get All Recipients ---
 app.get("/api/recipients", (req, res) => {
-  const sql = "SELECT id, first_name, last_name, email FROM recipients";
+  const sql = "SELECT id, firstName, lastName, email FROM recipients";
   db.query(sql, (err, results) => {
     if (err) return res.status(500).json({ error: "Failed to fetch recipients" });
 
     // Map snake_case -> camelCase
     const mapped = results.map((r) => ({
       id: r.id,
-      firstName: r.first_name,
-      lastName: r.last_name,
+      firstName: r.firstName,
+      lastName: r.lastName,
       email: r.email,
     }));
 
@@ -212,6 +212,20 @@ app.get('/api/analytics/:linkId', (req, res) => {
 });
 
 app.get('/api/links', (req, res) => { res.json(loadLinks()); });
+
+app.delete('/api/links/:linkId', (req, res) => {
+  const { linkId } = req.params;
+  const links = loadLinks();
+
+  if (!links[linkId]) {
+    return res.status(404).json({ error: 'Link not found' });
+  }
+
+  delete links[linkId];
+  saveLinks(links);
+
+  res.json({ message: 'Link deleted successfully' });
+});
 // ------------------------------
 // === END ADDED BY ZACH ===
 

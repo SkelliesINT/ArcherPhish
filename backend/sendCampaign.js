@@ -3,6 +3,22 @@
 const nodemailer = require('nodemailer');
 const mysql = require("mysql2");
 const pLimit = require('p-limit');
+const fs = require('fs');
+const path = require('path');
+
+const DATA_DIR = path.join(__dirname, 'data');
+const LINKS_FILE = path.join(DATA_DIR, 'links.json');
+if (!fs.existsSync(LINKS_FILE)) fs.writeFileSync(LINKS_FILE, JSON.stringify({}), 'utf8');
+
+function loadLinks() { 
+  try { 
+    return JSON.parse(fs.readFileSync(LINKS_FILE, 'utf8') || '{}'); 
+  } catch (e) { 
+    console.error('Failed to load links:', e); 
+    return {}; 
+  } 
+}
+
 
 module.exports = function registerSendCampaignRoute(app, db) {
   if (!app) throw new Error('Express app required');
@@ -62,47 +78,92 @@ module.exports = function registerSendCampaignRoute(app, db) {
 
   app.post('/api/send-campaign', async (req, res) => {
     try {
-      const { simulatedEmail, testOnly } = req.body || {};
+      const { simulatedEmail, testOnly, linkId } = req.body || {};
 
       if (!simulatedEmail || typeof simulatedEmail !== 'string') {
         return res.status(400).json({ error: 'simulatedEmail (string) is required' });
       }
 
       const { from, subject, body } = parseSimulatedEmail(simulatedEmail);
+      let finalBody = body;
+
+      let fullShortUrl = null;
+
+      if (finalBody.includes('[SIMULATED LINK]')) {
+        if (linkId) {
+          // Use the existing link
+          const links = loadLinks();
+          const link = links[linkId];
+          if (!link) return res.status(404).json({ error: 'Provided linkId not found' });
+          fullShortUrl = `http://localhost:4000/r/${link.id}`;
+          finalBody = finalBody.replace(/\[SIMULATED LINK\]/g, fullShortUrl);
+        } else {
+          // Fallback: create a new link
+          try {
+            const linkRes = await fetch(`http://localhost:4000/api/links`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                url: "https://example.com/training",
+                name: "campaign-link"
+              })
+            });
+            const linkData = await linkRes.json();
+            if (linkData.shortUrl) {
+              fullShortUrl = `http://localhost:4000${linkData.shortUrl}`;
+              finalBody = finalBody.replace(/\[SIMULATED LINK\]/g, fullShortUrl);
+            }
+          } catch (e) {
+            console.error("Failed generating trackable link:", e);
+          }
+        }
+      }
 
       // fetch recipient list from DB
-      const sql = 'SELECT email FROM recipients';
+      const sql = 'SELECT email, firstName, lastName FROM recipients';
       db.query(sql, async (err, results) => {
         if (err) {
           console.error('Failed to fetch recipients:', err);
           return res.status(500).json({ error: 'Failed to fetch recipients' });
         }
 
-        const recipients = results.map(r => r.email).filter(Boolean);
+        const recipients = results.map(r => ({
+          email: r.email,
+          firstName: r.firstName,
+          lastName: r.lastName
+        })).filter(r => r.email);
+
         if (recipients.length === 0) return res.json({ message: 'No recipients to send to' });
 
-        // if testOnly, limit to the first recipient
         const targets = testOnly ? recipients.slice(0, 1) : recipients;
 
-        // concurrency limiter (avoid blast)
         const limit = pLimit.default ? pLimit.default(5) : pLimit(5);
 
-        const sendOne = async (toEmail) => {
+        const sendOne = async (recipient) => {
+          const { email, firstName, lastName } = recipient;
+          const name = firstName || lastName || "Employee";
+
+          // Replace name placeholders, but keep the same finalBody with one link
+          let personalizedBody = finalBody.replace(/{{\s*employee\s*}}/gi, name);
+
           const mailOptions = {
-            from: from,
-            to: toEmail,
-            subject: subject,
-            text: body,
-            html: body.replace(/\n/g, '<br/>')
+            from,
+            to: email,
+            subject,
+            text: personalizedBody,
+            html: personalizedBody.replace(/\n/g, '<br/>')
           };
+
           return transporter.sendMail(mailOptions);
         };
 
-        const sendPromises = targets.map(to => limit(() =>
-          sendOne(to)
-            .then(info => ({ to, success: true, info }))
-            .catch(err => ({ to, success: false, error: err && err.message ? err.message : String(err) }))
-        ));
+        const sendPromises = targets.map(rec =>
+          limit(() =>
+            sendOne(rec)
+              .then(info => ({ email: rec.email, success: true, info }))
+              .catch(error => ({ email: rec.email, success: false, error: error?.message || String(error) }))
+          )
+        );
 
         const resultsSend = await Promise.all(sendPromises);
         const successCount = resultsSend.filter(r => r.success).length;
@@ -116,7 +177,7 @@ module.exports = function registerSendCampaignRoute(app, db) {
             total: targets.length,
             success: successCount,
             failed: failed.length,
-            failedList: failed.map(f => ({ to: f.to, error: f.error }))
+            failedList: failed.map(f => ({ email: f.email, error: f.error }))
           }
         });
       });

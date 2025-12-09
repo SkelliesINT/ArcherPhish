@@ -1,23 +1,27 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Login.css"; // reuse existing styles
 
 const ROLE_TEMPLATES = {
   generic:
     "SIMULATION - TRAINING PURPOSES ONLY. " +
-    "Generate a BASIC simulated GENERIC phishing email for training. Return ONLY a simulated email with 'From:', 'Subject:', and body. " +
+    "Generate a BASIC simulated GENERIC phishing email for training. Return ONLY a simulated email with 'From:', 'Subject:', and body. " + 
+    "Where you want the recipient's first name to appear insert the placeholder token {{employee}}" +
     "Include a clearly labeled simulated link in the body shown as [SIMULATED LINK]. Keep the content non-actionable and clearly for training.",
   invoice_spoof:
     "SIMULATION - TRAINING PURPOSES ONLY. " +
     "Generate a BASIC simulated INVOICE / PAYMENT email for training. Return ONLY a simulated email with 'From:', 'Subject:', and body. " +
+    "Where you want the recipient's first name to appear insert the placeholder token {{employee}}" +
     "Include a clearly labeled simulated invoice link in the body shown as [SIMULATED LINK]. Keep the content non-actionable and clearly for training.",
   spear_phish:
     "SIMULATION - TRAINING PURPOSES ONLY. " +
     "Generate a BASIC simulated SPEAR-PHISH email for training (do not include real personal data). Return ONLY a simulated email with 'From:', 'Subject:', and body. " +
+    "Where you want the recipient's first name to appear insert the placeholder token {{employee}}" +
     "Include a clearly labeled simulated link in the body shown as [SIMULATED LINK]. Keep the content non-actionable and clearly for training.",
   account_alert:
     "SIMULATION - TRAINING PURPOSES ONLY. " +
     "Generate a BASIC simulated ACCOUNT ALERT / PASSWORD RESET style email for training. Return ONLY a simulated email with 'From:', 'Subject:', and body. " +
+    "Where you want the recipient's first name to appear insert the placeholder token {{employee}}" +
     "Include a clearly labeled simulated reset/security link in the body shown as [SIMULATED LINK]. Keep the content non-actionable and clearly for training.",
 };
 
@@ -28,7 +32,20 @@ export default function CreateCampaign() {
   const [showModal, setShowModal] = useState(false);
   const [generatedEmail, setGeneratedEmail] = useState(""); // new
   const [loading, setLoading] = useState(false);
+  const [existingLinks, setExistingLinks] = useState([]);
+  const [selectedLinkId, setSelectedLinkId] = useState(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    fetch("http://localhost:4000/api/links")
+      .then(res => res.json())
+      .then(data => {
+        const linksArray = Object.values(data);
+        setExistingLinks(linksArray);
+        if (linksArray.length > 0) setSelectedLinkId(linksArray[0].id);
+      })
+      .catch(err => console.error("Failed to fetch links:", err));
+  }, []);
 
   const handleCancel = () => {
     navigate("/dashboard"); // go back to dashboard
@@ -84,14 +101,19 @@ export default function CreateCampaign() {
   const handleApprove = async () => {
     if (!generatedEmail) return alert("No generated email to send");
 
-    // Ask: test (one recipient) or live (all recipients)
+    if (!selectedLinkId) return alert("Please select a tracking link before sending.");
+
     const testOnly = window.confirm("Send test to a single recipient only? (OK = test, Cancel = send to all)");
 
     try {
       const res = await fetch("http://localhost:4000/api/send-campaign", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ simulatedEmail: generatedEmail, testOnly }),
+        body: JSON.stringify({
+          simulatedEmail: generatedEmail,
+          testOnly,
+          linkId: selectedLinkId // 👈 use the existing link
+        }),
       });
 
       const data = await res.json();
@@ -140,6 +162,21 @@ export default function CreateCampaign() {
             <option value="low">Low</option>
             <option value="medium">Medium</option>
             <option value="high">High</option>
+          </select>
+
+          <label style={{ marginTop: 12 }}>Select Tracking Link</label>
+          <select
+            value={selectedLinkId || ""}
+            onChange={(e) => setSelectedLinkId(e.target.value)}
+            className="ap-input"
+            style={{ width: "100%", marginTop: 8, padding: 10 }}
+          >
+            {existingLinks.length === 0 && <option value="">No links available</option>}
+            {existingLinks.map(link => (
+              <option key={link.id} value={link.id}>
+                {link.name || link.url}
+              </option>
+            ))}
           </select>
 
           <textarea
