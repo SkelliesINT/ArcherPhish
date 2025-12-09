@@ -1,9 +1,211 @@
-.login-page {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* frontend/src/Login.css */
+:root{
+  --bg:#0b0c10;
+  --card:#121217;
+  --accent:#00e5ff;
+  --accent-dark:#00a6b3;
+  --muted:#9aa0a6;
+  --glass: rgba(255,255,255,0.03);
+  --radius:16px;
+}
+
+*{box-sizing:border-box}
+html,body,#root{height:100%}
+body{
+  margin:0;
+  font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  background: linear-gradient(180deg, #07080a 0%, #0d0f13 100%);
+  color:#e8eef1;
+  -webkit-font-smoothing:antialiased;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:32px;
+}
+
+/* Card */
+.ap-card{
+  width:920px;
+  max-width:calc(100% - 48px);
+  display:flex;
+  border-radius:var(--radius);
+  overflow:hidden;
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  box-shadow: 0 12px 40px rgba(0,0,0,0.6), 0 0 1px 1px rgba(0,255,255,0.02) inset;
+  border: 1px solid rgba(0,255,255,0.04);
+}
+
+/* Left column: brand + logo */
+.ap-card-left{
+  width:40%;
+  min-width:280px;
+  padding:36px;
+  background:
+    linear-gradient(135deg, rgba(0,229,255,0.03) 0%, rgba(0,166,179,0.02) 100%),
+    radial-gradient(800px 200px at 10% 10%, rgba(0,229,255,0.04), transparent 30%);
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:18px;
+}
+
+.ap-logo{
+  width:275px;
+  height:275px;
+  object-fit:contain;
+}
+
+.ap-brand h1{
+  margin:0;
+  font-size:26px;
+  letter-spacing:0.6px;
+  color:#e7fbff;
+}
+
+.ap-tag{
+  margin:0;
+  font-size:13px;
+  color:var(--muted);
+}
+
+/* Right column: form */
+.ap-card-right{
+  width:60%;
+  padding:40px 48px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:12px;
+  background: linear-gradient(0deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));
+}
+
+.ap-card-right h2{
+  margin:0 0 8px 0;
+  font-size:20px;
+  color:#dffcff;
+}
+
+.ap-form{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  margin-top:8px;
+}
+
+.ap-label{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  font-size:13px;
+  color:var(--muted);
+}
+
+.ap-input{
+  width:100%;
+  padding:12px 14px;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.04);
+  background:var(--glass);
+  color:inherit;
+  outline:none;
+  font-size:14px;
+}
+
+.ap-input:focus{
+  box-shadow: 0 6px 18px rgba(0,229,255,0.06);
+  border-color:var(--accent);
+}
+
+.ap-button{
+  margin-top:6px;
+  padding:12px 14px;
+  border-radius:10px;
+  border: none;
+  background: linear-gradient(90deg, var(--accent), var(--accent-dark));
+  color:#041216;
+  font-weight:600;
+  cursor:pointer;
+  box-shadow: 0 10px 30px rgba(0,166,179,0.12);
+}
+
+.ap-button:hover{ transform: translateY(-1px); transition: .15s ease; }
+
+/* Error */
+.ap-error{
+  margin-top:6px;
+  color:#ff9a9a;
+  font-size:13px;
+}
+
+/* Footer links */
+.ap-footer{
+  margin-top:8px;
+  display:flex;
+  gap:10px;
+  align-items:center;
+  font-size:13px;
+  color:var(--muted);
+}
+
+.ap-link{
+  color:var(--muted);
+  text-decoration:none;
+}
+
+.ap-link:hover{ color:var(--accent); }
+
+/* Responsive: stack on small screens */
+@media (max-width: 820px) {
+  .ap-card{ flex-direction:column; }
+  .ap-card-left{ width:100%; align-items:center; text-align:center; padding:24px; }
+  .ap-card-right{ width:100%; padding:24px; }
+  .ap-logo{ margin:auto; }
+}
+
+.ap-success {
+  margin-top: 6px;
+  color: #66ff99;
+  font-size: 13px;
+}
+
+/* Modal overlay */
+.ap-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
   height: 100vh;
-  background-color: #20232a;
-  color: #61dafb;
-  font-size: 2rem;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.ap-modal-card {
+  flex-direction: column;
+  max-width: 400px;
+  padding: 24px;
+  background: var(--card);
+  border-radius: var(--radius);
+}
+
+.blur-background {
+  filter: blur(5px);
+}
+
+.ap-modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.ap-page {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh; /* full screen height */
+  width: 100%;
+  background: linear-gradient(180deg, #07080a 0%, #0d0f13 100%);
 }
