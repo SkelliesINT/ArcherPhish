@@ -1,12 +1,12 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const mysql = require('mysql2');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { PrismaClient } = require('@prisma/client');
 
 const registerAIGenerateRoute = require('./aiGenerate');
 const registerSendCampaignRoute = require('./sendCampaign');
@@ -18,20 +18,9 @@ app.use(cors({ origin: 'http://localhost:3000' }));
 app.use(express.json());
 
 // ------------------------------
-// MySQL Connection
+// Prisma
 // ------------------------------
-const db = mysql.createConnection({
-  host: process.env.DB_HOST || '127.0.0.1',
-  port: parseInt(process.env.DB_PORT || '3306', 10),
-  user: process.env.DB_USER,
-  password: process.env.DB_PASS,
-  database: process.env.DB_NAME
-});
-
-db.connect(err => {
-  if (err) console.error('❌ Database connection failed:', err);
-  else console.log('✅ Connected to MySQL');
-});
+const prisma = new PrismaClient();
 
 // ------------------------------
 // User Registration
@@ -42,16 +31,14 @@ app.post('/api/register', async (req, res) => {
 
   try {
     const hash = await bcrypt.hash(password, 10);
-    const sql = 'INSERT INTO users (email, password) VALUES (?, ?)';
-    db.query(sql, [email, hash], (err, result) => {
-      if (err) {
-        if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'Email already exists' });
-        console.error(err);
-        return res.status(500).json({ error: 'Server error' });
-      }
-      res.status(201).json({ message: 'User registered', id: result.insertId });
+    
+    const user = await prisma.user.create({
+      data: { email, password: hash},
     });
+
+    res.status(201).json({ message: 'User registered', id: user.id });
   } catch (err) {
+    if (err.code === 'P2002')return res.status(409).json({ error: 'Email already exists'});
     console.error(err);
     res.status(500).json({ error: 'Server error' });
   }
@@ -60,16 +47,15 @@ app.post('/api/register', async (req, res) => {
 // ------------------------------
 // User Login
 // ------------------------------
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+  if (!email || !password)
+    return res.status(400).json({ error: 'Email and password required' });
 
-  const sql = 'SELECT id, email, password FROM users WHERE email = ?';
-  db.query(sql, [email], async (err, results) => {
-    if (err) return res.status(500).json({ error: 'Database error' });
-    if (results.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
+  try {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
 
-    const user = results[0];
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.status(401).json({ error: 'Invalid credentials' });
 
@@ -80,7 +66,10 @@ app.post('/api/login', (req, res) => {
     );
 
     res.json({ message: 'Login successful', token, user: { id: user.id, email: user.email } });
-  });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 // ------------------------------
@@ -103,50 +92,42 @@ app.get('/api/dashboard', (req, res) => {
 // ------------------------------
 
 // Get all recipients
-app.post("/api/recipients", (req, res) => {
-  const { firstName, lastName, email } = req.body;
+app.post("/api/recipients", async (req, res) => {
+  const { firstName = '', lastName = '', email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email is required' });
 
-  if (!email) return res.status(400).json({ error: "Email is required" });
-
-  const sql = "INSERT INTO recipients (firstName, lastName, email) VALUES (?, ?, ?)";
-  db.query(sql, [firstName || "", lastName || "", email], (err, result) => {
-    if (err) {
-      console.error("Failed to add recipient:", err);
-      return res.status(500).json({ error: "Failed to add recipient" });
-    }
-    res.json({
-      message: "Recipient added successfully",
-      recipient: { id: result.insertId, firstName, lastName, email },
+  try {
+    const recipient = await prisma.recipient.create({
+      data: { firstName, lastName, email },
     });
-  });
+    res.json({ message: 'Recipient added', recipient });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to add recipient' });
+  }
 });
 
 // --- Get All Recipients ---
-app.get("/api/recipients", (req, res) => {
-  const sql = "SELECT id, firstName, lastName, email FROM recipients";
-  db.query(sql, (err, results) => {
-    if (err) return res.status(500).json({ error: "Failed to fetch recipients" });
-
-    // Map snake_case -> camelCase
-    const mapped = results.map((r) => ({
-      id: r.id,
-      firstName: r.firstName,
-      lastName: r.lastName,
-      email: r.email,
-    }));
-
-    res.json(mapped);
-  });
+app.get("/api/recipients", async (req, res) => {
+  try {
+    const recipients = await prisma.recipient.findMany();
+    res.json(recipients);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch recipients' });
+  }
 });
 
 // --- Delete Recipient ---
-app.delete("/api/recipients/:id", (req, res) => {
-  const { id } = req.params;
-  const sql = "DELETE FROM recipients WHERE id = ?";
-  db.query(sql, [id], (err) => {
-    if (err) return res.status(500).json({ error: "Failed to delete recipient" });
-    res.json({ message: "Recipient removed" });
-  });
+app.delete("/api/recipients/:id", async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  try {
+    await prisma.recipient.delete({ where: { id } });
+    res.json({ message: 'Recipient removed' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to delete recipient' });
+  }
 });
 
 // ------------------------------
@@ -230,6 +211,6 @@ app.delete('/api/links/:linkId', (req, res) => {
 // === END ADDED BY ZACH ===
 
 registerAIGenerateRoute(app);
-registerSendCampaignRoute(app, db);
+registerSendCampaignRoute(app, prisma);
 
 app.listen(PORT, () => console.log(`🚀 Backend running on http://localhost:${PORT}`));
