@@ -1,10 +1,21 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import Sidebar from "./Sidebar";
 import "./Dashboard.css";
 import "./TargetProfiles.css";
 
 export default function TargetProfiles() {
+  const token = localStorage.getItem("token");
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const user = JSON.parse(localStorage.getItem("user"));
+    if (!user || user.role !== "admin") {
+      navigate("/dashboard");
+    }
+  }, [navigate]);
+  
   const [recipients, setRecipients] = useState([]);
   const [newFirstName, setNewFirstName] = useState("");
   const [newLastName, setNewLastName] = useState("");
@@ -12,8 +23,7 @@ export default function TargetProfiles() {
   const [searchTerm, setSearchTerm] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-
-  const token = localStorage.getItem("token");
+  
 
   // Fetch recipients
   const fetchRecipients = async () => {

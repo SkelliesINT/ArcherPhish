@@ -1,16 +1,23 @@
 // frontend/src/Sidebar.jsx
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { FaCrosshairs, FaChartLine, FaSignOutAlt, FaTachometerAlt, FaNewspaper } from "react-icons/fa"; // added FaTachometerAlt for dashboard icon
+import { FaCrosshairs, FaChartLine, FaSignOutAlt, FaTachometerAlt, FaNewspaper, FaGraduationCap } from "react-icons/fa"; // added FaTachometerAlt for dashboard icon
 import "./Dashboard.css";
 
 export default function Sidebar() {
   const navigate = useNavigate();
 
+  const token = localStorage.getItem("token");
+  const isLoggedIn = !!token;
+
+  const user = JSON.parse(localStorage.getItem("user"));
+  const role = user?.role;
+  const isAdmin = role === "admin";
+
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-    navigate("/");
+    window.location.href = "/dashboard";
   };
 
   return (
@@ -21,36 +28,51 @@ export default function Sidebar() {
       </div>
 
       <div className="sidebar-icons">
-        {/* Dashboard button */}
+      {/* Dashboard */}
         <div className="sidebar-item" onClick={() => navigate("/dashboard")}>
           <FaTachometerAlt className="icon" />
           <span className="label">Dashboard</span>
         </div>
 
-        {/* Target Profiles */}
-        <div className="sidebar-item" onClick={() => navigate("/target-profiles")}>
-          <FaCrosshairs className="icon" />
-          <span className="label">Target Profiles</span>
-        </div>
+        {isAdmin && (
+          <div className="sidebar-item" onClick={() => navigate("/target-profiles")}>
+            <FaCrosshairs className="icon" />
+            <span className="label">Target Profiles</span>
+          </div>
+        )}
 
-        {/* Analytics */}
-        <div className="sidebar-item">
-          <FaChartLine className="icon" />
-          <span className="label">Analytics</span>
-        </div>
+        {isAdmin && (
+          <div className="sidebar-item" onClick={() => navigate("/analytics")}>
+            <FaChartLine className="icon" />
+            <span className="label">Analytics</span>
+          </div>
+        )}
 
         <div className="sidebar-item" onClick={() => navigate("/news")}>
-            <FaNewspaper className="icon" />
-  <         span className="label">News</span>
+          <FaNewspaper className="icon" />
+          <span className="label">News</span>
         </div>
 
+        {!isAdmin && (
+          <div className="sidebar-item" onClick={() => navigate("/training")}>
+            <FaGraduationCap className="icon" />
+            <span className="label">Training</span>
+          </div>
+        )}
       </div>
 
       <div className="sidebar-bottom">
-        <div className="sidebar-item" onClick={handleLogout}>
-          <FaSignOutAlt className="icon" />
-          <span className="label">Logout</span>
-        </div>
+        {!isLoggedIn ? (
+          <div className="sidebar-item" onClick={() => navigate("/login")}>
+            <FaSignOutAlt className="icon" />
+            <span className="label">Login</span>
+          </div>
+        ) : (
+          <div className="sidebar-item" onClick={handleLogout}>
+            <FaSignOutAlt className="icon" />
+            <span className="label">Logout</span>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -60,12 +60,12 @@ app.post('/api/login', async (req, res) => {
     if (!match) return res.status(401).json({ error: 'Invalid credentials' });
 
     const token = jwt.sign(
-      { id: user.id, email: user.email },
+      { id: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET || 'supersecretkey',
       { expiresIn: '1h' }
     );
 
-    res.json({ message: 'Login successful', token, user: { id: user.id, email: user.email } });
+    res.json({ message: 'Login successful', token, user: { id: user.id, email: user.email, role: user.role } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });

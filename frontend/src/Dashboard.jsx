@@ -29,24 +29,30 @@ export default function Dashboard() {
   const [createLinkLoading, setCreateLinkLoading] = useState(false);
 
   // Existing auth / welcome message
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      navigate("/");
-      return;
-    }
+const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-    axios
-      .get("http://localhost:4000/api/dashboard", {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      .then((res) => setMessage(res.data.message))
-      .catch((err) => {
-        setMessage(err.response?.data?.error || "Error");
-        localStorage.removeItem("token");
-        navigate("/");
-      });
-  }, [navigate]);
+useEffect(() => {
+  const token = localStorage.getItem("token");
+
+  if (!token) {
+    setIsLoggedIn(false);
+    setMessage("Welcome! Please log in to access full features.");
+    return;
+  }
+
+  setIsLoggedIn(true);
+
+  axios
+    .get("http://localhost:4000/api/dashboard", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    .then((res) => setMessage(res.data.message))
+    .catch(() => {
+      localStorage.removeItem("token");
+      setIsLoggedIn(false);
+      setMessage("Welcome! Please log in.");
+    });
+}, []);
 
   // Load links for analytics on mount
   useEffect(() => {
@@ -64,10 +70,11 @@ export default function Dashboard() {
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-    navigate("/");
+    window.location.href = "/dashboard";
   };
 
   const handleAddEmail = () => {
+    if (!isLoggedIn) return;
     setEmailMessage("");
     setEmailError("");
 
@@ -90,6 +97,7 @@ export default function Dashboard() {
 
   // Load analytics for a specific short link
   const handleViewAnalytics = async (linkId) => {
+    if (!isLoggedIn) return;
     setSelectedLinkId(linkId);
     setAnalytics(null);
     setAnalyticsError("");
@@ -122,6 +130,7 @@ export default function Dashboard() {
   };
 
   const handleCreateLink = async (e) => {
+    if (!isLoggedIn) return;
     e.preventDefault();
     setCreateLinkError("");
 
@@ -165,6 +174,7 @@ export default function Dashboard() {
   };
 
   const handleDeleteLink = async (linkId) => {
+  if (!isLoggedIn) return;
   if (!window.confirm("Are you sure you want to delete this tracking link?")) return;
 
   try {
@@ -192,19 +202,31 @@ export default function Dashboard() {
         <h1>Dashboard</h1>
         <p className="dashboard-message">{message}</p>
 
-        <div className="dashboard-actions">
-          <button className="ap-button" onClick={handleCreateCampaign}>
-            Create Campaign
-          </button>
-          <button
-            className="ap-button ap-button-secondary"
-            onClick={openCreateModal}
-          >
-            Create Tracking Link
-          </button>
-        </div>
+        {!isLoggedIn && (
+          <div className="guest-info">
+            <p>
+              You are currently browsing as a guest.
+              Log in to create campaigns, manage links, and view analytics.
+            </p>
+          </div>
+        )}
+
+        {isLoggedIn && (
+          <div className="dashboard-actions">
+            <button className="ap-button" onClick={handleCreateCampaign}>
+              Create Campaign
+            </button>
+            <button
+              className="ap-button ap-button-secondary"
+              onClick={openCreateModal}
+            >
+              Create Tracking Link
+            </button>
+          </div>
+        )}
 
         {/* Analytics Section */}
+        {isLoggedIn && (
         <section className="analytics-section">
           <h2 className="analytics-title">Link Analytics</h2>
 
@@ -250,7 +272,6 @@ export default function Dashboard() {
                 ))}
               </ul>
             </div>
-
             {/* Right: details for selected link */}
             <div className="analytics-details-card">
               <h3 className="analytics-subtitle">Details</h3>
@@ -344,7 +365,7 @@ export default function Dashboard() {
             </div>
           </div>
         </section>
-
+        )}
         {/* 🔹 Create Tracking Link Modal */}
         {isCreateModalOpen && (
           <div className="modal-backdrop" onClick={closeCreateModal}>
