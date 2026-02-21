@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Login.css"; // reuse existing styles
 
+
 const ROLE_TEMPLATES = {
   generic:
     "SIMULATION - TRAINING PURPOSES ONLY. " +
@@ -138,7 +139,7 @@ export default function CreateCampaign() {
       <div className={showModal ? "blur-background" : ""}>
         <div className="ap-card" style={{ flexDirection: "column", maxWidth: "700px", padding: "28px" }}>
           <h1>Create Campaign (Phishing Awareness Simulator)</h1>
-
+            
           <label style={{ marginTop: 12 }}>Role (simulation style)</label>
           <select
             value={role}

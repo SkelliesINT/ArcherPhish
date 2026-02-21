@@ -14,6 +14,9 @@ const registerSendCampaignRoute = require('./sendCampaign');
 const app = express();
 const PORT = process.env.PORT || 4000;
 
+const axios = require("axios");
+const xml2js = require("xml2js");
+
 app.use(cors({ origin: 'http://localhost:3000' }));
 app.use(express.json());
 
@@ -228,6 +231,46 @@ app.delete('/api/links/:linkId', (req, res) => {
 });
 // ------------------------------
 // === END ADDED BY ZACH ===
+
+
+// ------------------------------
+// NewsAPI Endpoint
+// ------------------------------
+app.get("/api/news", async (req, res) => {
+  const topic = req.query.q || "phishing";
+  console.log("Received /api/news request for topic:", topic);
+
+  const apiKey = process.env.NEWS_API_KEY;
+  if (!apiKey) {
+    console.error("NEWS_API_KEY is missing in .env");
+    return res.status(500).json({ error: "Missing NEWS_API_KEY in backend" });
+  }
+
+  try {
+    const response = await axios.get("https://newsapi.org/v2/everything", {
+      params: { q: topic, language: "en", pageSize: 12, apiKey },
+    });
+
+    console.log("NewsAPI returned articles:", response.data.articles.length);
+
+    const articles = response.data.articles.map((article) => ({
+      title: article.title,
+      link: article.url,
+      published: article.publishedAt,
+      source: article.source.name,
+      image: article.urlToImage,
+      description: article.description,
+    }));
+
+    res.json(articles);
+  } catch (err) {
+    console.error("NewsAPI error:", err.response?.data || err.message);
+    res.status(500).json({ error: "Failed to fetch news" });
+  }
+});
+
+
+
 
 registerAIGenerateRoute(app);
 registerSendCampaignRoute(app, db);

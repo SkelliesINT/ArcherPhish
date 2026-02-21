@@ -7,6 +7,7 @@ import Dashboard from "./Dashboard";
 import CreateCampaign from "./CreateCampaign";
 import TargetProfiles from "./TargetProfiles";
 import NewsPage from './NewsPage';
+import Analytics from "./Analytics";
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
@@ -20,6 +21,7 @@ root.render(
         @<Route path="/dashboard" element={<Dashboard />} />
         <Route path="/target-profiles" element={<TargetProfiles />} />
         <Route path="/news" element={<NewsPage />} />
+        <Route path="/analytics" element={<Analytics />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>

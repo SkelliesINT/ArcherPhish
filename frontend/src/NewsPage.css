@@ -1,0 +1,75 @@
+/* frontend/src/NewsPage.css */
+
+.news-header {
+  font-size: 2rem;
+  margin-bottom: 20px;
+  color: #fff;
+}
+
+.loading-text {
+  font-size: 1.2rem;
+  color: #555;
+}
+
+/* Grid for news cards */
+.news-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+/* Individual news card */
+.news-card {
+  background-color: #cccccc;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.news-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.news-image {
+  width: 100%;
+  height: 150px;
+  object-fit: cover;
+}
+
+.news-content {
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.news-link {
+  text-decoration: none;
+  color: #222;
+}
+
+.news-link:hover .news-title {
+  color: #007bff;
+}
+
+.news-title {
+  font-size: 1.1rem;
+  margin-bottom: 10px;
+}
+
+.news-description {
+  font-size: 0.95rem;
+  color: #555;
+  margin-bottom: 10px;
+  flex: 1;
+}
+
+.news-meta {
+  font-size: 0.85rem;
+  color: #888;
+  margin-top: auto;
+}

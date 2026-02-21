@@ -482,3 +482,103 @@
   color: #e8eef1;
   border: 1px solid rgba(255, 255, 255, 0.25);
 }
+
+/* News widget styles */
+.dashboard-news-section {
+  margin-top: 20px;
+  padding: 15px;
+  background-color: rgba(255, 255, 255, 0.05); /* match dashboard card style */
+  border-radius: 8px;
+}
+
+.dashboard-news-section h2 {
+  margin-bottom: 10px;
+  font-size: 1.2rem;
+  color: #fff;
+}
+
+.top-news-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.top-news-item {
+  display: flex;
+  gap: 10px;
+  background-color: #101014;
+  padding: 10px;
+  border-radius: 6px;
+  text-decoration: none;
+}
+
+.top-news-item:hover {
+  background-color: #3a3a50;
+}
+
+.top-news-thumbnail {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.top-news-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  color: #fff;
+}
+
+.top-news-title {
+  font-weight: bold;
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.top-news-source {
+  font-size: 0.8rem;
+  color: #aaa;
+  margin: 2px 0 0 0;
+}
+
+/* Active sidebar icon */
+.sidebar-item.active .icon {
+  color: #00e5ff; /* change to your theme color */
+}
+
+/* Optional: keep label color in sync with icon */
+.sidebar-item.active .label {
+  color: #00e5ff;
+}
+
+/* Hover effect for all items */
+.sidebar-item:hover .icon,
+.sidebar-item:hover .label {
+  color: #00e5ff; /* slightly darker on hover */
+}
+
+/* Days Since Last Campaign Widget */
+.days-since-widget {
+  margin-bottom: 20px;
+  padding: 15px;
+  background-color: #1e1e2f;
+  border-radius: 8px;
+  width: 200px;
+  text-align: center;
+}
+
+.days-widget-label {
+  color: #aaa;
+  font-size: 0.85rem;
+  margin: 0 0 5px 0;
+}
+
+.days-widget-number {
+  font-size: 2rem;
+  font-weight: bold;
+  margin: 0;
+}
+
+
+

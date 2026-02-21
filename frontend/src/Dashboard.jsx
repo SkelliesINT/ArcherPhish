@@ -7,6 +7,7 @@ import "./Dashboard.css";
 import "./index.css";
 import Sidebar from "./Sidebar";
 
+
 export default function Dashboard() {
   const [message, setMessage] = useState("Welcome back!");
   const [newEmail, setNewEmail] = useState("");
@@ -27,6 +28,30 @@ export default function Dashboard() {
   const [newLinkName, setNewLinkName] = useState("");
   const [createLinkError, setCreateLinkError] = useState("");
   const [createLinkLoading, setCreateLinkLoading] = useState(false);
+  // Top News state
+  const [topNews, setTopNews] = useState([]);
+  const [loadingNews, setLoadingNews] = useState(true);
+
+  // Days since last campaign
+  const [daysSinceLastCampaign, setDaysSinceLastCampaign] = useState(64); //Replace with days since last campaign ran
+  const getDaysColor = (days) => {
+    if (days <= 30) return "#4caf50";   // green
+    if (days <= 160) return "#ffeb3b";  // yellow
+    return "#f44336";                   // red
+  };
+
+
+  useEffect(() => {
+    axios.get("http://localhost:4000/api/news?q=phishing")
+      .then(res => {
+        setTopNews(res.data.slice(0, 3)); // only top 3
+        setLoadingNews(false);
+      })
+      .catch(err => {
+        console.error("Failed to load top news:", err);
+        setLoadingNews(false);
+      });
+  }, []);
 
   // Existing auth / welcome message
   useEffect(() => {
@@ -191,6 +216,15 @@ export default function Dashboard() {
       <div className="dashboard-main">
         <h1>Dashboard</h1>
         <p className="dashboard-message">{message}</p>
+        <div className="days-since-widget">
+          <p className="days-widget-label">Days Since Last Campaign</p>
+          <p
+            className="days-widget-number"
+            style={{ color: getDaysColor(daysSinceLastCampaign) }}
+          >
+            {daysSinceLastCampaign}
+          </p>
+        </div>
 
         <div className="dashboard-actions">
           <button className="ap-button" onClick={handleCreateCampaign}>
@@ -344,6 +378,41 @@ export default function Dashboard() {
             </div>
           </div>
         </section>
+        {/* 🔹 Top 3 News Widget */}
+        <section className="dashboard-news-section">
+          <h2>Top Phishing News</h2>
+
+          {loadingNews ? (
+            <p>Loading news...</p>
+          ) : (
+            <div className="top-news-list">
+              {topNews.map((article, index) => (
+                <a
+                  key={index}
+                  href={article.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="top-news-item"
+                >
+                  {article.image && (
+                    <img
+                      src={article.image}
+                      alt={article.title}
+                      className="top-news-thumbnail"
+                    />
+                  )}
+                  <div className="top-news-text">
+                    <p className="top-news-title">{article.title}</p>
+                    <p className="top-news-source">
+                      {article.source} • {new Date(article.published).toLocaleDateString()}
+                    </p>
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
+        </section>
+
 
         {/* 🔹 Create Tracking Link Modal */}
         {isCreateModalOpen && (
@@ -405,3 +474,4 @@ export default function Dashboard() {
     </div>
   );
 }
+
