@@ -17,6 +17,7 @@ export default function Dashboard() {
 
   // 🔹 Analytics state
   const [links, setLinks] = useState([]);
+  const [recipients, setRecipients] = useState([]);
   const [selectedLinkId, setSelectedLinkId] = useState(null);
   const [analytics, setAnalytics] = useState(null);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
@@ -28,6 +29,7 @@ export default function Dashboard() {
   const [newLinkName, setNewLinkName] = useState("");
   const [createLinkError, setCreateLinkError] = useState("");
   const [createLinkLoading, setCreateLinkLoading] = useState(false);
+
   // Top News state
   const [topNews, setTopNews] = useState([]);
   const [loadingNews, setLoadingNews] = useState(true);
@@ -39,7 +41,6 @@ export default function Dashboard() {
     if (days <= 160) return "#ffeb3b";  // yellow
     return "#f44336";                   // red
   };
-
 
   useEffect(() => {
     axios.get("http://localhost:4000/api/news?q=phishing")
@@ -86,6 +87,14 @@ export default function Dashboard() {
       });
   }, []);
 
+  // Load recipients for the create-link modal
+  useEffect(() => {
+    axios
+      .get("http://localhost:4000/api/recipients")
+      .then((res) => setRecipients(res.data))
+      .catch((err) => console.error("Failed to load recipients", err));
+  }, []);
+
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
@@ -124,7 +133,13 @@ export default function Dashboard() {
       const res = await axios.get(
         `http://localhost:4000/api/analytics/${linkId}`
       );
-      setAnalytics(res.data);
+      setAnalytics({
+        link: res.data.link || null,
+        totalClicks: res.data.totalClicks || 0,
+        uniqueUsers: res.data.uniqueUsers || 0,
+        perDay: res.data.perDay || {},
+        uaCounts: res.data.uaCounts || {},
+      });
     } catch (err) {
       console.error(err);
       setAnalyticsError(err.response?.data?.error || "Failed to load analytics");
@@ -190,23 +205,21 @@ export default function Dashboard() {
   };
 
   const handleDeleteLink = async (linkId) => {
-  if (!window.confirm("Are you sure you want to delete this tracking link?")) return;
+    if (!window.confirm("Are you sure you want to delete this tracking link?")) return;
 
-  try {
-    await axios.delete(`http://localhost:4000/api/links/${linkId}`);
-    // Remove link from state
-    setLinks((prev) => prev.filter((link) => link.id !== linkId));
+    try {
+      await axios.delete(`http://localhost:4000/api/links/${linkId}`);
+      setLinks((prev) => prev.filter((link) => link.id !== linkId));
 
-    // Clear analytics if the deleted link was selected
-    if (selectedLinkId === linkId) {
-      setSelectedLinkId(null);
-      setAnalytics(null);
+      if (selectedLinkId === linkId) {
+        setSelectedLinkId(null);
+        setAnalytics(null);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete link: " + (err.response?.data?.error || err.message));
     }
-  } catch (err) {
-    console.error(err);
-    alert("Failed to delete link: " + (err.response?.data?.error || err.message));
-  }
-};
+  };
 
   return (
     <div className="dashboard-container">
@@ -301,20 +314,26 @@ export default function Dashboard() {
                 </p>
               )}
 
-              {analytics && !loadingAnalytics && (
+              {analytics && analytics.link && !loadingAnalytics && (
                 <div className="analytics-details">
-                  <p>
-                    <span className="analytics-label">Target URL:</span>{" "}
-                    <span className="analytics-value">
-                      {analytics.link.url}
-                    </span>
-                  </p>
+                  {analytics.link.url && (
+                    <p>
+                      <span className="analytics-label">Target URL:</span>{" "}
+                      <span className="analytics-value">{analytics.link.url}</span>
+                    </p>
+                  )}
                   {analytics.link.name && (
                     <p>
-                      <span className="analytics-label">Name:</span>{" "}
-                      <span className="analytics-value">
-                        {analytics.link.name}
-                      </span>
+                      <span className="analytics-label">
+                        {analytics.link.url ? "Name:" : "Campaign:"}
+                      </span>{" "}
+                      <span className="analytics-value">{analytics.link.name}</span>
+                    </p>
+                  )}
+                  {analytics.link.employee && (
+                    <p>
+                      <span className="analytics-label">Employee:</span>{" "}
+                      <span className="analytics-value">{analytics.link.employee}</span>
                     </p>
                   )}
                   <p>
@@ -335,6 +354,12 @@ export default function Dashboard() {
                       {analytics.uniqueUsers}
                     </span>
                   </p>
+                  <p>
+                    <span className="analytics-label">Result:</span>{" "}
+                    <span className={analytics.totalClicks > 0 ? "analytics-fail" : "analytics-pass"}>
+                      {analytics.totalClicks > 0 ? "Clicked (Fail)" : "No Clicks (Pass)"}
+                    </span>
+                  </p>
 
                   <div className="analytics-grid">
                     <div>
@@ -343,13 +368,11 @@ export default function Dashboard() {
                         <p className="analytics-muted">No click data yet.</p>
                       ) : (
                         <ul className="analytics-mini-list">
-                          {Object.entries(analytics.perDay).map(
-                            ([day, count]) => (
-                              <li key={day}>
-                                {day}: {count}
-                              </li>
-                            )
-                          )}
+                          {Object.entries(analytics.perDay).map(([day, count]) => (
+                            <li key={day}>
+                              {day}: {count}
+                            </li>
+                          ))}
                         </ul>
                       )}
                     </div>
@@ -357,18 +380,14 @@ export default function Dashboard() {
                     <div>
                       <h4>User Agents</h4>
                       {Object.keys(analytics.uaCounts).length === 0 ? (
-                        <p className="analytics-muted">
-                          No user agent data.
-                        </p>
+                        <p className="analytics-muted">No user agent data.</p>
                       ) : (
                         <ul className="analytics-mini-list">
-                          {Object.entries(analytics.uaCounts).map(
-                            ([ua, count]) => (
-                              <li key={ua}>
-                                {ua}: {count}
-                              </li>
-                            )
-                          )}
+                          {Object.entries(analytics.uaCounts).map(([ua, count]) => (
+                            <li key={ua}>
+                              {ua}: {count}
+                            </li>
+                          ))}
                         </ul>
                       )}
                     </div>
@@ -378,6 +397,7 @@ export default function Dashboard() {
             </div>
           </div>
         </section>
+
         {/* 🔹 Top 3 News Widget */}
         <section className="dashboard-news-section">
           <h2>Top Phishing News</h2>
@@ -412,7 +432,6 @@ export default function Dashboard() {
             </div>
           )}
         </section>
-
 
         {/* 🔹 Create Tracking Link Modal */}
         {isCreateModalOpen && (
@@ -474,4 +493,3 @@ export default function Dashboard() {
     </div>
   );
 }
-

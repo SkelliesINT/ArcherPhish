@@ -319,6 +319,17 @@
   background-color: #c9302c;
 }
 
+.analytics-pass {
+  color: #66ff99;
+  font-weight: bold;
+}
+
+.analytics-fail {
+  color: #ff9a9a;
+  font-weight: bold;
+}
+
+
 /* Right details card */
 .analytics-details-card {
   flex: 2 1 320px;
@@ -579,6 +590,5 @@
   font-weight: bold;
   margin: 0;
 }
-
 
 

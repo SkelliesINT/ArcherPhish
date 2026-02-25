@@ -1,7 +1,6 @@
 // backend/sendCampaign.js
 // Registers POST /api/send-campaign which sends the provided simulatedEmail to recipients in DB
 const nodemailer = require('nodemailer');
-const mysql = require("mysql2");
 const pLimit = require('p-limit');
 const fs = require('fs');
 const path = require('path');
@@ -10,13 +9,13 @@ const DATA_DIR = path.join(__dirname, 'data');
 const LINKS_FILE = path.join(DATA_DIR, 'links.json');
 if (!fs.existsSync(LINKS_FILE)) fs.writeFileSync(LINKS_FILE, JSON.stringify({}), 'utf8');
 
-function loadLinks() { 
-  try { 
-    return JSON.parse(fs.readFileSync(LINKS_FILE, 'utf8') || '{}'); 
-  } catch (e) { 
-    console.error('Failed to load links:', e); 
-    return {}; 
-  } 
+function loadLinks() {
+  try {
+    return JSON.parse(fs.readFileSync(LINKS_FILE, 'utf8') || '{}');
+  } catch (e) {
+    console.error('Failed to load links:', e);
+    return {};
+  }
 }
 
 
@@ -119,67 +118,63 @@ module.exports = function registerSendCampaignRoute(app, db) {
         }
       }
 
-      // fetch recipient list from DB
-      const sql = 'SELECT email, firstName, lastName FROM recipients';
-      db.query(sql, async (err, results) => {
-        if (err) {
-          console.error('Failed to fetch recipients:', err);
-          return res.status(500).json({ error: 'Failed to fetch recipients' });
-        }
+      // fetch recipient list from DB (using mysql2/promise pool)
+      const [results] = await db.query(
+        'SELECT email, first_name, last_name FROM recipients'
+      );
 
-        const recipients = results.map(r => ({
-          email: r.email,
-          firstName: r.firstName,
-          lastName: r.lastName
-        })).filter(r => r.email);
+      const recipients = results.map(r => ({
+        email: r.email,
+        firstName: r.first_name,
+        lastName: r.last_name
+      })).filter(r => r.email);
 
-        if (recipients.length === 0) return res.json({ message: 'No recipients to send to' });
+      if (recipients.length === 0) return res.json({ message: 'No recipients to send to' });
 
-        const targets = testOnly ? recipients.slice(0, 1) : recipients;
+      const targets = testOnly ? recipients.slice(0, 1) : recipients;
 
-        const limit = pLimit.default ? pLimit.default(5) : pLimit(5);
+      const limit = pLimit.default ? pLimit.default(5) : pLimit(5);
 
-        const sendOne = async (recipient) => {
-          const { email, firstName, lastName } = recipient;
-          const name = firstName || lastName || "Employee";
+      const sendOne = async (recipient) => {
+        const { email, firstName, lastName } = recipient;
+        const name = firstName || lastName || "Employee";
 
-          // Replace name placeholders, but keep the same finalBody with one link
-          let personalizedBody = finalBody.replace(/{{\s*employee\s*}}/gi, name);
+        // Replace name placeholders, but keep the same finalBody with one link
+        let personalizedBody = finalBody.replace(/{{\s*employee\s*}}/gi, name);
 
-          const mailOptions = {
-            from,
-            to: email,
-            subject,
-            text: personalizedBody,
-            html: personalizedBody.replace(/\n/g, '<br/>')
-          };
-
-          return transporter.sendMail(mailOptions);
+        const mailOptions = {
+          from,
+          to: email,
+          subject,
+          text: personalizedBody,
+          html: personalizedBody.replace(/\n/g, '<br/>')
         };
 
-        const sendPromises = targets.map(rec =>
-          limit(() =>
-            sendOne(rec)
-              .then(info => ({ email: rec.email, success: true, info }))
-              .catch(error => ({ email: rec.email, success: false, error: error?.message || String(error) }))
-          )
-        );
+        return transporter.sendMail(mailOptions);
+      };
 
-        const resultsSend = await Promise.all(sendPromises);
-        const successCount = resultsSend.filter(r => r.success).length;
-        const failed = resultsSend.filter(r => !r.success);
+      const sendPromises = targets.map(rec =>
+        limit(() =>
+          sendOne(rec)
+            .then(info => ({ email: rec.email, success: true, info }))
+            .catch(error => ({ email: rec.email, success: false, error: error?.message || String(error) }))
+        )
+      );
 
-        console.log(`Campaign send complete: ${successCount}/${targets.length} succeeded`);
+      const resultsSend = await Promise.all(sendPromises);
+      const successCount = resultsSend.filter(r => r.success).length;
+      const failed = resultsSend.filter(r => !r.success);
 
-        return res.json({
-          message: `Campaign send complete: ${successCount}/${targets.length} succeeded`,
-          details: {
-            total: targets.length,
-            success: successCount,
-            failed: failed.length,
-            failedList: failed.map(f => ({ email: f.email, error: f.error }))
-          }
-        });
+      console.log(`Campaign send complete: ${successCount}/${targets.length} succeeded`);
+
+      return res.json({
+        message: `Campaign send complete: ${successCount}/${targets.length} succeeded`,
+        details: {
+          total: targets.length,
+          success: successCount,
+          failed: failed.length,
+          failedList: failed.map(f => ({ email: f.email, error: f.error }))
+        }
       });
 
     } catch (err) {

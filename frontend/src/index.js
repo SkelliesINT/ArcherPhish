@@ -16,9 +16,8 @@ root.render(
       <Routes>
         <Route path="/" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/dashboard" element={<Dashboard />} />@
+        <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/create-campaign" element={<CreateCampaign />} />
-        @<Route path="/dashboard" element={<Dashboard />} />
         <Route path="/target-profiles" element={<TargetProfiles />} />
         <Route path="/news" element={<NewsPage />} />
         <Route path="/analytics" element={<Analytics />} />
