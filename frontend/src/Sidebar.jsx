@@ -7,6 +7,7 @@ import {
   FaSignOutAlt,
   FaTachometerAlt,
   FaNewspaper,
+  FaGraduationCap
 } from "react-icons/fa";
 import "./Dashboard.css";
 
@@ -14,10 +15,17 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation(); // get current path
 
+  const token = localStorage.getItem("token");
+  const isLoggedIn = !!token;
+
+  const user = JSON.parse(localStorage.getItem("user"));
+  const role = user?.role;
+  const isAdmin = role === "admin";
+
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-    navigate("/");
+    window.location.href = "/dashboard";
   };
 
   // Helper to determine if a route is active
@@ -41,6 +49,7 @@ export default function Sidebar() {
         </div>
 
         {/* Target Profiles */}
+        {isAdmin && (
         <div
           className={`sidebar-item ${isActive("/target-profiles") ? "active" : ""}`}
           onClick={() => navigate("/target-profiles")}
@@ -48,8 +57,10 @@ export default function Sidebar() {
           <FaCrosshairs className="icon" />
           <span className="label">Target Profiles</span>
         </div>
+        )}
 
         {/* Analytics */}
+        {isAdmin && (
         <div
           className={`sidebar-item ${isActive("/analytics") ? "active" : ""}`}
           onClick={() => navigate("/analytics")}
@@ -57,6 +68,7 @@ export default function Sidebar() {
           <FaChartLine className="icon" />
           <span className="label">Analytics</span>
         </div>
+        )}
 
         {/* News */}
         <div
@@ -66,13 +78,24 @@ export default function Sidebar() {
           <FaNewspaper className="icon" />
           <span className="label">News</span>
         </div>
+        <div className={`sidebar-item ${isActive("/training") ? "active" : ""}`}
+          onClick={() => navigate("/training")}>
+        <FaGraduationCap className="icon" />
+        <span className="label">Training</span>
+       </div>
       </div>
-
-      <div className="sidebar-bottom">
-        <div className="sidebar-item" onClick={handleLogout}>
-          <FaSignOutAlt className="icon" />
-          <span className="label">Logout</span>
-        </div>
+       <div className="sidebar-bottom">
+        {!isLoggedIn ? (
+          <div className="sidebar-item" onClick={() => navigate("/login")}>
+            <FaSignOutAlt className="icon" />
+            <span className="label">Login</span>
+          </div>
+        ) : (
+          <div className="sidebar-item" onClick={handleLogout}>
+            <FaSignOutAlt className="icon" />
+            <span className="label">Logout</span>
+          </div>
+        )}
       </div>
     </div>
   );

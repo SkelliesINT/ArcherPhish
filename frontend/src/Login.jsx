@@ -1,6 +1,6 @@
 // frontend/src/Login.jsx
 import React, { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate} from "react-router-dom";
 import axios from "axios";
 import "./Login.css";
 
@@ -69,9 +69,7 @@ export default function Login() {
             {error && <div className="ap-error">{error}</div>}
 
             <div className="ap-footer">
-              <Link to="/register" className="ap-link">Create account</Link>
-              <span className="ap-dot">•</span>
-              <a href="#" className="ap-link">Forgot password?</a>
+              <a href="/forgot-password" className="ap-link">Forgot password?</a>
             </div>
           </form>
         </div>

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaCrosshairs, FaChartLine, FaSignOutAlt, FaHome, FaNewspaper } from "react-icons/fa";
 import {
@@ -17,11 +17,19 @@ import "./Analytics.css";
 
 export default function Analytics() {
   const navigate = useNavigate();
+  const token = localStorage.getItem("token");
+
+  useEffect(() => {
+    const user = JSON.parse(localStorage.getItem("user"));
+    if (!user || user.role !== "admin") {
+      navigate("/dashboard");
+    }
+  }, [navigate]);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-    navigate("/");
+    window.location.href = "/dashboard";
   };
 
   // placeholder

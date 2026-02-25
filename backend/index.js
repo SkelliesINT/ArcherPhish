@@ -8,6 +8,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const axios = require("axios");
+const { PrismaClient } = require("@prisma/client");
 
 const registerAIGenerateRoute = require("./aiGenerate");
 const registerSendCampaignRoute = require("./sendCampaign");
@@ -17,6 +18,8 @@ const PORT = process.env.PORT || 4000;
 
 app.use(cors({ origin: "http://localhost:3000" }));
 app.use(express.json());
+
+const prisma = new PrismaClient();
 
 // ------------------------------
 // MySQL Connection Pool
@@ -45,15 +48,21 @@ app.post("/api/register", async (req, res) => {
 
   try {
     const hash = await bcrypt.hash(password, 10);
-    await db.query(
-      "INSERT INTO users (email, password) VALUES (?, ?)",
-      [email, hash]
-    );
-    res.status(201).json({ message: "User registered" });
+
+    const user = await prisma.users.create({
+      data: {
+        email,
+        password: hash,
+      },
+    });
+
+    res.status(201).json({ message: "User registered", id: user.id });
   } catch (err) {
-    if (err.code === "ER_DUP_ENTRY") {
+    if (err.code === "P2002" && err.meta?.target?.includes("email")) {
+      // Prisma unique constraint violation
       return res.status(409).json({ error: "Email already exists" });
     }
+
     console.error("Register error:", err);
     res.status(500).json({ error: "Server error" });
   }
@@ -66,29 +75,34 @@ app.post("/api/login", async (req, res) => {
   }
 
   try {
-    const [rows] = await db.query(
-      "SELECT id, email, password FROM users WHERE email = ?",
-      [email]
-    );
+    // Find the user by email
+    const user = await prisma.users.findUnique({
+      where: { email },
+      select: { id: true, email: true, password: true, role: true },
+    });
 
-    if (!rows.length) {
+    if (!user) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    const user = rows[0];
+    // Compare password
     const match = await bcrypt.compare(password, user.password);
-
     if (!match) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
+    // Generate JWT token
     const token = jwt.sign(
-      { id: user.id, email: user.email },
+      { id: user.id, email: user.email, role: user.role},
       process.env.JWT_SECRET || "supersecretkey",
       { expiresIn: "1h" }
     );
 
-    res.json({ message: "Login successful", token, user: { id: user.id, email: user.email } });
+    res.json({
+      message: "Login successful",
+      token,
+      user: { id: user.id, email: user.email, role: user.role},
+    });
   } catch (err) {
     console.error("Login error:", err);
     res.status(500).json({ error: "Database error" });
@@ -118,13 +132,17 @@ app.post("/api/recipients", async (req, res) => {
   if (!email) return res.status(400).json({ error: "Email is required" });
 
   try {
-    const [result] = await db.query(
-      "INSERT INTO recipients (first_name, last_name, email) VALUES (?, ?, ?)",
-      [firstName || "", lastName || "", email]
-    );
+    const recipient = await prisma.recipients.create({
+      data: {
+        firstName: firstName || "",
+        lastName: lastName || "",
+        email,
+      },
+    });
+
     res.json({
       message: "Recipient added successfully",
-      recipient: { id: result.insertId, firstName, lastName, email },
+      recipient,
     });
   } catch (err) {
     console.error("Failed to add recipient:", err);
@@ -134,15 +152,16 @@ app.post("/api/recipients", async (req, res) => {
 
 app.get("/api/recipients", async (req, res) => {
   try {
-    const [rows] = await db.query(
-      "SELECT id, first_name, last_name, email FROM recipients"
-    );
-    res.json(rows.map(r => ({
-      id: r.id,
-      firstName: r.first_name,
-      lastName: r.last_name,
-      email: r.email,
-    })));
+    const recipients = await prisma.recipients.findMany({
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+      },
+    });
+
+    res.json(recipients);
   } catch (err) {
     console.error("Recipient fetch error:", err);
     res.status(500).json({ error: "Failed to fetch recipients" });
@@ -151,10 +170,15 @@ app.get("/api/recipients", async (req, res) => {
 
 app.delete("/api/recipients/:id", async (req, res) => {
   const { id } = req.params;
+
   try {
-    await db.query("DELETE FROM recipients WHERE id = ?", [id]);
+    await prisma.recipients.delete({
+      where: { id: parseInt(id) },
+    });
+
     res.json({ message: "Recipient removed" });
   } catch (err) {
+    console.error("Failed to delete recipient:", err);
     res.status(500).json({ error: "Failed to delete recipient" });
   }
 });
@@ -168,11 +192,18 @@ app.post("/api/campaigns", async (req, res) => {
   if (!name) return res.status(400).json({ error: "Campaign name required" });
 
   try {
-    const [result] = await db.query(
-      "INSERT INTO campaigns (name, difficulty) VALUES (?, ?)",
-      [name, difficulty]
-    );
-    res.status(201).json({ id: result.insertId, name, difficulty });
+    const campaign = await prisma.campaigns.create({
+      data: {
+        name,
+        difficulty, // will default to "medium" if not provided
+      },
+    });
+
+    res.status(201).json({
+      id: campaign.id,
+      name: campaign.name,
+      difficulty: campaign.difficulty,
+    });
   } catch (err) {
     console.error("Campaign creation error:", err);
     res.status(500).json({ error: "Failed to create campaign" });
@@ -181,10 +212,17 @@ app.post("/api/campaigns", async (req, res) => {
 
 app.get("/api/campaigns", async (req, res) => {
   try {
-    const [rows] = await db.query(
-      "SELECT id, name, difficulty, created_at FROM campaigns ORDER BY created_at DESC"
-    );
-    res.json(rows);
+    const campaigns = await prisma.campaigns.findMany({
+      orderBy: { created_at: "desc" }, // order by created_at descending
+      select: {
+        id: true,
+        name: true,
+        difficulty: true,
+        created_at: true,
+      },
+    });
+
+    res.json(campaigns);
   } catch (err) {
     console.error("Campaign fetch error:", err);
     res.status(500).json({ error: "Failed to fetch campaigns" });
@@ -205,47 +243,41 @@ app.post("/api/campaigns/:campaignId/recipients", async (req, res) => {
 
   if (!email) return res.status(400).json({ error: "Email required" });
 
-  const connection = await db.getConnection();
+  const trackingId = generateTrackingId();
 
   try {
-    await connection.beginTransaction();
+    const result = await prisma.$transaction(async (prisma) => {
+      // Check if recipient exists
+      let recipient = await prisma.recipients.findUnique({
+        where: { email },
+      });
 
-    let [existing] = await connection.query(
-      "SELECT id FROM recipients WHERE email = ?",
-      [email]
-    );
+      if (!recipient) {
+        // Create recipient
+        recipient = await prisma.recipients.create({
+          data: { firstName, lastName, email },
+        });
+      }
 
-    let recipientId;
+      // Create phishing link
+      const phishingLink = await prisma.phishing_links.create({
+        data: {
+          campaign_id: parseInt(campaignId),
+          recipient_id: recipient.id,
+          tracking_id: trackingId,
+        },
+      });
 
-    if (existing.length) {
-      recipientId = existing[0].id;
-    } else {
-      const [insertResult] = await connection.query(
-        "INSERT INTO recipients (first_name, last_name, email) VALUES (?, ?, ?)",
-        [firstName, lastName, email]
-      );
-      recipientId = insertResult.insertId;
-    }
-
-    const trackingId = generateTrackingId();
-
-    await connection.query(
-      "INSERT INTO phishing_links (campaign_id, recipient_id, tracking_id) VALUES (?, ?, ?)",
-      [campaignId, recipientId, trackingId]
-    );
-
-    await connection.commit();
+      return phishingLink;
+    });
 
     res.status(201).json({
       message: "Recipient added to campaign",
       trackingLink: `${process.env.BASE_URL || "http://localhost:4000"}/r/${trackingId}`,
     });
   } catch (err) {
-    await connection.rollback();
     console.error("Campaign recipient error:", err);
     res.status(500).json({ error: "Failed to add recipient to campaign" });
-  } finally {
-    connection.release();
   }
 });
 
@@ -268,21 +300,33 @@ function genId(length = 6) { return crypto.randomBytes(Math.ceil(length * 3 / 4)
 function hashIp(ip) { return crypto.createHash("sha256").update(ip || "").digest("hex"); }
 function getClientIp(req) { const forwarded = req.headers["x-forwarded-for"]; if (forwarded) return forwarded.split(",")[0].trim(); return req.socket.remoteAddress || ""; }
 
-app.post("/api/links", (req, res) => {
+app.post("/api/links", async (req, res) => {
   const { url, name } = req.body;
   if (!url) return res.status(400).json({ error: "url required" });
-  const links = loadLinks();
-  const id = genId(7);
-  links[id] = { id, url, name: name || null, createdAt: new Date().toISOString() };
-  saveLinks(links);
-  res.json({ id, shortUrl: `/r/${id}`, target: url });
+
+  try {
+    const id = genId(7);
+    const link = await prisma.phishing_links.create({
+      data: {
+        tracking_id: id,
+        campaign_id: 0, 
+        recipient_id: 0,
+        created_at: new Date(),
+      },
+    });
+
+    res.json({ id, shortUrl: `/r/${id}`, target: url, name: name || null });
+  } catch (err) {
+    console.error("Link creation error:", err);
+    res.status(500).json({ error: "Failed to create link" });
+  }
 });
 
 // Unified redirect: check flat-file first, then DB campaign links
 app.get("/r/:linkId", async (req, res) => {
   const { linkId } = req.params;
 
-  // Try flat-file links first (short base64url IDs)
+  // --- Flat-file first ---
   const links = loadLinks();
   if (links[linkId]) {
     const link = links[linkId];
@@ -294,26 +338,26 @@ app.get("/r/:linkId", async (req, res) => {
     return res.redirect(302, link.url);
   }
 
-  // Fall back to DB campaign tracking links (long hex IDs)
+  // --- Fall back to DB using Prisma ---
   try {
-    const [rows] = await db.query(
-      "SELECT id FROM phishing_links WHERE tracking_id = ?",
-      [linkId]
-    );
+    const phishingLink = await prisma.phishing_links.findUnique({
+      where: { tracking_id: linkId },
+      select: { id: true },
+    });
 
-    if (!rows.length) return res.status(404).send("Link not found");
+    if (!phishingLink) return res.status(404).send("Link not found");
 
-    const phishingLinkId = rows[0].id;
+    // Record the click event
+    await prisma.link_events.create({
+      data: {
+        phishing_link_id: phishingLink.id,
+        ip_address: req.headers["x-forwarded-for"] || req.socket.remoteAddress || "",
+        user_agent: req.headers["user-agent"] || "",
+        created_at: new Date(),
+      },
+    });
 
-    await db.query(
-      "INSERT INTO link_events (phishing_link_id, ip_address, user_agent) VALUES (?, ?, ?)",
-      [
-        phishingLinkId,
-        req.headers["x-forwarded-for"] || req.socket.remoteAddress || "",
-        req.headers["user-agent"] || "",
-      ]
-    );
-
+    // Redirect to your default target (update as needed)
     res.redirect(302, "https://example.com");
   } catch (err) {
     console.error("Redirect error:", err);
@@ -325,62 +369,89 @@ app.get("/r/:linkId", async (req, res) => {
 app.get("/api/analytics/:linkId", async (req, res) => {
   const { linkId } = req.params;
 
-  // Try flat-file first
+  // --- Flat-file first ---
   const links = loadLinks();
   if (links[linkId]) {
-    const data = fs.readFileSync(CLICKS_FILE, "utf8").trim().split("\n").filter(Boolean);
-    const clicks = data.map(line => { try { return JSON.parse(line); } catch { return null; } }).filter(Boolean).filter(c => c.linkId === linkId);
+    const data = fs
+      .readFileSync(CLICKS_FILE, "utf8")
+      .trim()
+      .split("\n")
+      .filter(Boolean);
+    const clicks = data
+      .map((line) => {
+        try {
+          return JSON.parse(line);
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean)
+      .filter((c) => c.linkId === linkId);
 
-    const perDay = {}, uaCounts = {};
-    clicks.forEach(c => {
+    const perDay = {};
+    const uaCounts = {};
+    clicks.forEach((c) => {
       const day = c.at.slice(0, 10);
       perDay[day] = (perDay[day] || 0) + 1;
       const ua = c.ua || "unknown";
       uaCounts[ua] = (uaCounts[ua] || 0) + 1;
     });
 
-    const uniqueIps = new Set(clicks.map(c => c.ipHash)).size;
-    return res.json({ link: links[linkId], totalClicks: clicks.length, uniqueUsers: uniqueIps, perDay, uaCounts });
+    const uniqueIps = new Set(clicks.map((c) => c.ipHash)).size;
+
+    return res.json({
+      link: links[linkId],
+      totalClicks: clicks.length,
+      uniqueUsers: uniqueIps,
+      perDay,
+      uaCounts,
+    });
   }
 
-  // Fall back to DB
+  // --- Fall back to DB using Prisma ---
   try {
-    const [[link]] = await db.query(
-      `SELECT pl.id, pl.tracking_id,
-              c.name AS campaign_name,
-              r.first_name, r.last_name
-       FROM phishing_links pl
-       JOIN recipients r ON r.id = pl.recipient_id
-       JOIN campaigns c ON c.id = pl.campaign_id
-       WHERE pl.tracking_id = ?`,
-      [linkId]
-    );
+    const link = await prisma.phishing_links.findUnique({
+      where: { tracking_id: linkId },
+      select: {
+        id: true,
+        tracking_id: true,
+        campaign: { select: { name: true } },
+        recipient: { select: { firstName: true, lastName: true } },
+      },
+    });
 
     if (!link) return res.status(404).json({ error: "Link not found" });
 
-    const [clicks] = await db.query(
-      "SELECT DATE(created_at) AS day, COUNT(*) AS count FROM link_events WHERE phishing_link_id = ? GROUP BY day",
-      [link.id]
-    );
+    // Fetch clicks grouped by day
+    const clicks = await prisma.link_events.groupBy({
+      by: ["created_at"],
+      where: { phishing_link_id: link.id },
+      _count: { created_at: true },
+    });
 
-    const [unique] = await db.query(
-      "SELECT COUNT(DISTINCT ip_address) AS uniqueUsers FROM link_events WHERE phishing_link_id = ?",
-      [link.id]
-    );
+    // Count unique IPs
+    const uniqueUsers = await prisma.link_events.count({
+      where: { phishing_link_id: link.id },
+      distinct: ["ip_address"],
+    });
 
+    // Build perDay object
     const perDay = {};
-    clicks.forEach(c => (perDay[c.day] = c.count));
+    clicks.forEach((c) => {
+      const day = c.created_at.toISOString().slice(0, 10);
+      perDay[day] = c._count.created_at;
+    });
 
     res.json({
       link: {
         id: link.tracking_id,
-        name: link.campaign_name,
-        employee: `${link.first_name} ${link.last_name}`,
+        name: link.campaign.name,
+        employee: `${link.recipient.firstName} ${link.recipient.lastName}`,
       },
-      totalClicks: clicks.reduce((s, c) => s + c.count, 0),
-      uniqueUsers: unique[0].uniqueUsers,
+      totalClicks: Object.values(perDay).reduce((sum, val) => sum + val, 0),
+      uniqueUsers,
       perDay,
-      uaCounts: {},
+      uaCounts: {}, // You could extend this later with UA tracking
     });
   } catch (err) {
     console.error("Analytics error:", err);

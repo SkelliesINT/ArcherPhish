@@ -7,11 +7,18 @@ import {
   FaSignOutAlt,
   FaHome,
   FaNewspaper,
+  FaGraduationCap
 } from "react-icons/fa";
 import "./Dashboard.css";
 import "./NewsPage.css";
 
 export default function NewsPage() {
+  const token = localStorage.getItem("token");
+  const isLoggedIn = !!token;
+  const user = JSON.parse(localStorage.getItem("user"));
+  const role = user?.role;
+  const isAdmin = role === "admin";
+
   const navigate = useNavigate();
   const [articles, setArticles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -19,7 +26,7 @@ export default function NewsPage() {
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-    navigate("/");
+    navigate("/dashboard");
   };
 
   useEffect(() => {
@@ -49,7 +56,7 @@ export default function NewsPage() {
             <FaHome className="icon" />
             <span className="label">Dashboard</span>
           </div>
-
+        {isAdmin && (
           <div
             className="sidebar-item"
             onClick={() => navigate("/target-profiles")}
@@ -57,24 +64,37 @@ export default function NewsPage() {
             <FaCrosshairs className="icon" />
             <span className="label">Target Profiles</span>
           </div>
-
+        )}
+        {isAdmin && (
           <div className="sidebar-item">
             <FaChartLine className="icon" />
             <span className="label">Analytics</span>
           </div>
-
+        )}
           <div className="sidebar-item active" onClick={() => navigate("/news")}>
             <FaNewspaper className="icon" />
             <span className="label">News</span>
           </div>
+        {!isLoggedIn && (
+        <div className="sidebar-item" onClick={() => navigate("/training")}>
+            <FaGraduationCap className="icon" />
+            <span className="label">Training</span>
         </div>
-
+        )}
+        </div>
         <div className="sidebar-bottom">
+        {!isLoggedIn ? (
+          <div className="sidebar-item" onClick={() => navigate("/login")}>
+            <FaSignOutAlt className="icon" />
+            <span className="label">Login</span>
+          </div>
+        ) : (
           <div className="sidebar-item" onClick={handleLogout}>
             <FaSignOutAlt className="icon" />
             <span className="label">Logout</span>
           </div>
-        </div>
+        )}
+      </div>
       </div>
 
       {/* Main Content */}

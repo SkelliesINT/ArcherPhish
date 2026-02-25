@@ -119,16 +119,11 @@ module.exports = function registerSendCampaignRoute(app, db) {
       }
 
       // fetch recipient list from DB (using mysql2/promise pool)
-      const [results] = await db.query(
-        'SELECT email, first_name, last_name FROM recipients'
-      );
+       const recipientsData = await prisma.recipient.findMany({
+        select: { email: true, firstName: true, lastName: true }
+      });
 
-      const recipients = results.map(r => ({
-        email: r.email,
-        firstName: r.first_name,
-        lastName: r.last_name
-      })).filter(r => r.email);
-
+      const recipients = recipientsData.filter(r => r.email);
       if (recipients.length === 0) return res.json({ message: 'No recipients to send to' });
 
       const targets = testOnly ? recipients.slice(0, 1) : recipients;
@@ -138,9 +133,7 @@ module.exports = function registerSendCampaignRoute(app, db) {
       const sendOne = async (recipient) => {
         const { email, firstName, lastName } = recipient;
         const name = firstName || lastName || "Employee";
-
-        // Replace name placeholders, but keep the same finalBody with one link
-        let personalizedBody = finalBody.replace(/{{\s*employee\s*}}/gi, name);
+        const personalizedBody = finalBody.replace(/{{\s*employee\s*}}/gi, name);
 
         const mailOptions = {
           from,
@@ -149,7 +142,6 @@ module.exports = function registerSendCampaignRoute(app, db) {
           text: personalizedBody,
           html: personalizedBody.replace(/\n/g, '<br/>')
         };
-
         return transporter.sendMail(mailOptions);
       };
 
