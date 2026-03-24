@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Login.css"; // reuse existing styles
 
@@ -33,20 +33,7 @@ export default function CreateCampaign() {
   const [showModal, setShowModal] = useState(false);
   const [generatedEmail, setGeneratedEmail] = useState(""); // new
   const [loading, setLoading] = useState(false);
-  const [existingLinks, setExistingLinks] = useState([]);
-  const [selectedLinkId, setSelectedLinkId] = useState(null);
   const navigate = useNavigate();
-
-  useEffect(() => {
-    fetch("http://localhost:4000/api/links")
-      .then(res => res.json())
-      .then(data => {
-        const linksArray = Object.values(data);
-        setExistingLinks(linksArray);
-        if (linksArray.length > 0) setSelectedLinkId(linksArray[0].id);
-      })
-      .catch(err => console.error("Failed to fetch links:", err));
-  }, []);
 
   const handleCancel = () => {
     navigate("/dashboard"); // go back to dashboard
@@ -102,8 +89,6 @@ export default function CreateCampaign() {
   const handleApprove = async () => {
     if (!generatedEmail) return alert("No generated email to send");
 
-    if (!selectedLinkId) return alert("Please select a tracking link before sending.");
-
     const testOnly = window.confirm("Send test to a single recipient only? (OK = test, Cancel = send to all)");
 
     try {
@@ -113,7 +98,6 @@ export default function CreateCampaign() {
         body: JSON.stringify({
           simulatedEmail: generatedEmail,
           testOnly,
-          linkId: selectedLinkId // 👈 use the existing link
         }),
       });
 
@@ -163,21 +147,6 @@ export default function CreateCampaign() {
             <option value="low">Low</option>
             <option value="medium">Medium</option>
             <option value="high">High</option>
-          </select>
-
-          <label style={{ marginTop: 12 }}>Select Tracking Link</label>
-          <select
-            value={selectedLinkId || ""}
-            onChange={(e) => setSelectedLinkId(e.target.value)}
-            className="ap-input"
-            style={{ width: "100%", marginTop: 8, padding: 10 }}
-          >
-            {existingLinks.length === 0 && <option value="">No links available</option>}
-            {existingLinks.map(link => (
-              <option key={link.id} value={link.id}>
-                {link.name || link.url}
-              </option>
-            ))}
           </select>
 
           <textarea

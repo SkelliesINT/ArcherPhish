@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import Sidebar from "./Sidebar";
@@ -16,16 +16,12 @@ export default function TargetProfiles() {
     }
   }, [navigate]);
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    window.location.href = "/dashboard";
-  };
-
   const [recipients, setRecipients] = useState([]);
   const [newFirstName, setNewFirstName] = useState("");
   const [newLastName, setNewLastName] = useState("");
   const [newEmail, setNewEmail] = useState("");
+  const [newDepartment, setNewDepartment] = useState("");
+  const [newJobTitle, setNewJobTitle] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -56,7 +52,7 @@ export default function TargetProfiles() {
     try {
       const res = await axios.post(
         "http://localhost:4000/api/recipients",
-        { firstName: newFirstName, lastName: newLastName, email: newEmail },
+        { firstName: newFirstName, lastName: newLastName, email: newEmail, department: newDepartment, jobTitle: newJobTitle },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setRecipients((prev) => [...prev, res.data.recipient]);
@@ -64,6 +60,8 @@ export default function TargetProfiles() {
       setNewFirstName("");
       setNewLastName("");
       setNewEmail("");
+      setNewDepartment("");
+      setNewJobTitle("");
     } catch (err) {
       setError(err.response?.data?.error || "Failed to add recipient");
     }
@@ -82,12 +80,16 @@ export default function TargetProfiles() {
   };
 
   // Filtered list
-  const filteredRecipients = recipients.filter(
-    (r) =>
-      r.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredRecipients = recipients.filter((r) => {
+    const term = searchTerm.toLowerCase();
+    return (
+      (r.firstName || "").toLowerCase().includes(term) ||
+      (r.lastName || "").toLowerCase().includes(term) ||
+      (r.email || "").toLowerCase().includes(term) ||
+      (r.department || "").toLowerCase().includes(term) ||
+      (r.jobTitle || "").toLowerCase().includes(term)
+    );
+  });
 
   return (
     <div className="dashboard-container">
@@ -115,6 +117,18 @@ export default function TargetProfiles() {
               value={newEmail}
               onChange={(e) => setNewEmail(e.target.value)}
             />
+            <input
+              type="text"
+              placeholder="Department"
+              value={newDepartment}
+              onChange={(e) => setNewDepartment(e.target.value)}
+            />
+            <input
+              type="text"
+              placeholder="Job Title"
+              value={newJobTitle}
+              onChange={(e) => setNewJobTitle(e.target.value)}
+            />
             <button onClick={handleAdd}>Add</button>
           </div>
           {message && <p className="success">{message}</p>}
@@ -137,6 +151,8 @@ export default function TargetProfiles() {
                 <th>First Name</th>
                 <th>Last Name</th>
                 <th>Email</th>
+                <th>Department</th>
+                <th>Job Title</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -146,6 +162,8 @@ export default function TargetProfiles() {
                   <td>{r.firstName}</td>
                   <td>{r.lastName}</td>
                   <td>{r.email}</td>
+                  <td>{r.department || "—"}</td>
+                  <td>{r.jobTitle || "—"}</td>
                   <td>
                     <button className="delete-btn" onClick={() => handleDelete(r.id)}>Delete</button>
                   </td>
@@ -153,7 +171,7 @@ export default function TargetProfiles() {
               ))}
               {filteredRecipients.length === 0 && (
                 <tr>
-                  <td colSpan={4} style={{ textAlign: "center" }}>
+                  <td colSpan={6} style={{ textAlign: "center" }}>
                     No recipients found
                   </td>
                 </tr>

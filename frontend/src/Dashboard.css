@@ -387,16 +387,6 @@
   transform: translateY(-1px);
 }
 
-/* ---------------------------
-   Dashboard Actions Row
---------------------------- */
-.dashboard-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 24px;
-}
-
 .ap-button-secondary {
   background: transparent;
   color: #e8eef1;
@@ -496,61 +486,68 @@
 
 /* News widget styles */
 .dashboard-news-section {
-  margin-top: 20px;
-  padding: 15px;
-  background-color: rgba(255, 255, 255, 0.05); /* match dashboard card style */
-  border-radius: 8px;
+  margin-top: 30px;
 }
 
 .dashboard-news-section h2 {
-  margin-bottom: 10px;
-  font-size: 1.2rem;
-  color: #fff;
+  margin-bottom: 16px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
 }
 
 .top-news-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
 }
 
 .top-news-item {
   display: flex;
-  gap: 10px;
-  background-color: #101014;
-  padding: 10px;
-  border-radius: 6px;
+  flex-direction: column;
+  background-color: #151519;
+  border-radius: 10px;
+  overflow: hidden;
   text-decoration: none;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .top-news-item:hover {
-  background-color: #3a3a50;
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  border-color: rgba(0, 229, 255, 0.25);
 }
 
 .top-news-thumbnail {
-  width: 60px;
-  height: 60px;
+  width: 100%;
+  height: 150px;
   object-fit: cover;
-  border-radius: 4px;
+  display: block;
 }
 
 .top-news-text {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  color: #fff;
+  gap: 6px;
+  padding: 12px 14px;
+  flex: 1;
 }
 
 .top-news-title {
-  font-weight: bold;
-  font-size: 0.95rem;
+  font-weight: 600;
+  font-size: 0.88rem;
   margin: 0;
+  color: #e8eef1;
+  line-height: 1.45;
 }
 
 .top-news-source {
-  font-size: 0.8rem;
-  color: #aaa;
-  margin: 2px 0 0 0;
+  font-size: 0.75rem;
+  color: #666;
+  margin: 0;
 }
 
 /* Active sidebar icon */
@@ -569,26 +566,173 @@
   color: #00e5ff; /* slightly darker on hover */
 }
 
-/* Days Since Last Campaign Widget */
-.days-since-widget {
-  margin-bottom: 20px;
-  padding: 15px;
-  background-color: #1e1e2f;
-  border-radius: 8px;
-  width: 200px;
+/* ---------------------------
+   Campaign Overview Widget
+--------------------------- */
+.campaign-overview-widget {
+  background-color: #151519;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 24px 28px;
+  margin-bottom: 24px;
+  max-width: 500px;
+}
+
+.cow-header {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin: 0 0 16px 0;
+}
+
+.cow-body {
+  display: flex;
+  align-items: stretch;
+  gap: 28px;
+}
+
+.cow-left {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 20px;
+  min-width: 180px;
+}
+
+.cow-days-number {
+  font-size: 3.5rem;
+  font-weight: 700;
+  line-height: 1;
+  margin: 0 0 6px 0;
   text-align: center;
 }
 
-.days-widget-label {
-  color: #aaa;
+.cow-days-label {
   font-size: 0.85rem;
-  margin: 0 0 5px 0;
+  color: #aaa;
+  margin: 0;
+  text-align: center;
 }
 
-.days-widget-number {
-  font-size: 2rem;
-  font-weight: bold;
+.cow-launch-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 10px;
+  background: #00e5ff;
+  color: #101014;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.1s ease;
+  white-space: nowrap;
+  align-self: flex-start;
+}
+
+.cow-launch-btn:hover {
+  background: #33ecff;
+  transform: translateY(-1px);
+}
+
+.cow-vdivider {
+  width: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  align-self: stretch;
+  flex-shrink: 0;
+}
+
+.cow-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 2px;
+  flex: 1;
+}
+
+.cow-stat {
+  text-align: center;
+  padding: 12px 8px;
+}
+
+.cow-stat-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #00e5ff;
+  margin: 0 0 4px 0;
+}
+
+.cow-stat-label {
+  font-size: 0.7rem;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   margin: 0;
 }
+
+/* ---------------------------
+   Most Recent Campaign Card
+--------------------------- */
+.recent-campaign-card {
+  background-color: #151519;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+}
+
+.recent-campaign-header {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin: 0 0 6px 0;
+}
+
+.recent-campaign-name {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #e8eef1;
+  margin: 0 0 16px 0;
+}
+
+.recent-campaign-stats {
+  display: flex;
+  gap: 32px;
+  margin-bottom: 16px;
+}
+
+.recent-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.recent-stat-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #e8eef1;
+}
+
+.recent-stat-label {
+  font-size: 0.72rem;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.recent-campaign-link {
+  background: none;
+  border: none;
+  color: #00e5ff;
+  font-size: 0.82rem;
+  cursor: pointer;
+  padding: 0;
+}
+
+.recent-campaign-link:hover {
+  text-decoration: underline;
+}
+
 
 

@@ -56,7 +56,7 @@
   border-radius: 4px;
   border: 1px solid #ccc;
   color: white;
-  background-color: #151519
+  background-color: #151519;
 }
 
 /* Table */
@@ -93,7 +93,8 @@
 }
 
 .recipient-table tr:hover td {
-  background-color: var(--row-hover);
+  background-color: #252530 !important;
+  color: #ffffff !important;
 }
 
 /* Delete Button */

@@ -2,24 +2,9 @@
 // Registers POST /api/send-campaign which sends the provided simulatedEmail to recipients in DB
 const nodemailer = require('nodemailer');
 const pLimit = require('p-limit');
-const fs = require('fs');
-const path = require('path');
-
-const DATA_DIR = path.join(__dirname, 'data');
-const LINKS_FILE = path.join(DATA_DIR, 'links.json');
-if (!fs.existsSync(LINKS_FILE)) fs.writeFileSync(LINKS_FILE, JSON.stringify({}), 'utf8');
-
-function loadLinks() {
-  try {
-    return JSON.parse(fs.readFileSync(LINKS_FILE, 'utf8') || '{}');
-  } catch (e) {
-    console.error('Failed to load links:', e);
-    return {};
-  }
-}
 
 
-module.exports = function registerSendCampaignRoute(app, db) {
+module.exports = function registerSendCampaignRoute(app, db, prisma) {
   if (!app) throw new Error('Express app required');
   if (!db) throw new Error('Database connection required');
 
@@ -77,50 +62,19 @@ module.exports = function registerSendCampaignRoute(app, db) {
 
   app.post('/api/send-campaign', async (req, res) => {
     try {
-      const { simulatedEmail, testOnly, linkId } = req.body || {};
+      const { simulatedEmail, testOnly } = req.body || {};
 
       if (!simulatedEmail || typeof simulatedEmail !== 'string') {
         return res.status(400).json({ error: 'simulatedEmail (string) is required' });
       }
 
       const { from, subject, body } = parseSimulatedEmail(simulatedEmail);
-      let finalBody = body;
+      // Keep rawBody with [SIMULATED LINK] intact so per-recipient tracking URLs can be substituted in sendOne
+      const rawBody = body;
 
-      let fullShortUrl = null;
-
-      if (finalBody.includes('[SIMULATED LINK]')) {
-        if (linkId) {
-          // Use the existing link
-          const links = loadLinks();
-          const link = links[linkId];
-          if (!link) return res.status(404).json({ error: 'Provided linkId not found' });
-          fullShortUrl = `http://localhost:4000/r/${link.id}`;
-          finalBody = finalBody.replace(/\[SIMULATED LINK\]/g, fullShortUrl);
-        } else {
-          // Fallback: create a new link
-          try {
-            const linkRes = await fetch(`http://localhost:4000/api/links`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                url: "https://example.com/training",
-                name: "campaign-link"
-              })
-            });
-            const linkData = await linkRes.json();
-            if (linkData.shortUrl) {
-              fullShortUrl = `http://localhost:4000${linkData.shortUrl}`;
-              finalBody = finalBody.replace(/\[SIMULATED LINK\]/g, fullShortUrl);
-            }
-          } catch (e) {
-            console.error("Failed generating trackable link:", e);
-          }
-        }
-      }
-
-      // fetch recipient list from DB (using mysql2/promise pool)
-       const recipientsData = await prisma.recipient.findMany({
-        select: { email: true, firstName: true, lastName: true }
+      // fetch recipient list from DB
+      const recipientsData = await prisma.recipients.findMany({
+        select: { id: true, email: true, firstName: true, lastName: true }
       });
 
       const recipients = recipientsData.filter(r => r.email);
@@ -128,12 +82,41 @@ module.exports = function registerSendCampaignRoute(app, db) {
 
       const targets = testOnly ? recipients.slice(0, 1) : recipients;
 
+      // Create campaign record in DB
+      const [campaignResult] = await db.query(
+        'INSERT INTO campaigns (name, difficulty) VALUES (?, ?)',
+        [subject || 'Untitled Campaign', 'medium']
+      );
+      const campaignId = campaignResult.insertId;
+
+      // Generate a unique tracking ID per recipient and create phishing_links
+      const crypto = require('crypto');
+      const recipientTrackingMap = {};
+      for (const rec of targets) {
+        const trackingId = crypto.randomBytes(24).toString('hex');
+        try {
+          await db.query(
+            'INSERT INTO phishing_links (campaign_id, recipient_id, tracking_id) VALUES (?, ?, ?)',
+            [campaignId, rec.id, trackingId]
+          );
+          recipientTrackingMap[rec.id] = trackingId;
+        } catch (e) {
+          console.error(`Failed to create phishing link for recipient ${rec.id}:`, e.message);
+        }
+      }
+
       const limit = pLimit.default ? pLimit.default(5) : pLimit(5);
 
       const sendOne = async (recipient) => {
-        const { email, firstName, lastName } = recipient;
+        const { id, email, firstName, lastName } = recipient;
         const name = firstName || lastName || "Employee";
-        const personalizedBody = finalBody.replace(/{{\s*employee\s*}}/gi, name);
+        const trackingId = recipientTrackingMap[id];
+        const trackingUrl = trackingId
+          ? `${process.env.BASE_URL || 'http://localhost:4000'}/r/${trackingId}`
+          : null;
+        const personalizedBody = rawBody
+          .replace(/{{\s*employee\s*}}/gi, name)
+          .replace(/\[SIMULATED LINK\]/g, trackingUrl || '[LINK]');
 
         const mailOptions = {
           from,
@@ -157,10 +140,11 @@ module.exports = function registerSendCampaignRoute(app, db) {
       const successCount = resultsSend.filter(r => r.success).length;
       const failed = resultsSend.filter(r => !r.success);
 
-      console.log(`Campaign send complete: ${successCount}/${targets.length} succeeded`);
+      console.log(`Campaign send complete: ${successCount}/${targets.length} succeeded. Campaign ID: ${campaignId}`);
 
       return res.json({
         message: `Campaign send complete: ${successCount}/${targets.length} succeeded`,
+        campaignId,
         details: {
           total: targets.length,
           success: successCount,

@@ -1,54 +1,100 @@
 // frontend/src/Dashboard.jsx
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import { FaCrosshairs, FaChartLine, FaSignOutAlt, FaNewspaper } from "react-icons/fa"; // Icons
 import "./Dashboard.css";
 import "./index.css";
 import Sidebar from "./Sidebar";
 
-
 export default function Dashboard() {
   const [message, setMessage] = useState("Welcome back!");
-  const [newEmail, setNewEmail] = useState("");
-  const [emailMessage, setEmailMessage] = useState("");
-  const [emailError, setEmailError] = useState("");
-  const navigate = useNavigate();
-
-  // 🔹 Analytics state
-  const [links, setLinks] = useState([]);
-  const [recipients, setRecipients] = useState([]);
-  const [selectedLinkId, setSelectedLinkId] = useState(null);
-  const [analytics, setAnalytics] = useState(null);
-  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
-  const [analyticsError, setAnalyticsError] = useState("");
-
-  // 🔹 Create-link modal state
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [newLinkUrl, setNewLinkUrl] = useState("");
-  const [newLinkName, setNewLinkName] = useState("");
-  const [createLinkError, setCreateLinkError] = useState("");
-  const [createLinkLoading, setCreateLinkLoading] = useState(false);
-
-  // Existing auth / welcome message
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-
-  // Top News state
   const [topNews, setTopNews] = useState([]);
   const [loadingNews, setLoadingNews] = useState(true);
+  const [daysSinceLastCampaign, setDaysSinceLastCampaign] = useState(null);
+  const [stats, setStats] = useState(null);
+  const [recentCampaign, setRecentCampaign] = useState(null);
+  const [totalRecipients, setTotalRecipients] = useState(null);
+  const navigate = useNavigate();
 
-  // Days since last campaign
-  const [daysSinceLastCampaign, setDaysSinceLastCampaign] = useState(64); //Replace with days since last campaign ran
   const getDaysColor = (days) => {
-    if (days <= 30) return "#4caf50";   // green
-    if (days <= 160) return "#ffeb3b";  // yellow
-    return "#f44336";                   // red
+    if (days === null) return "#aaa";
+    if (days <= 30) return "#4caf50";
+    if (days <= 160) return "#ffeb3b";
+    return "#f44336";
   };
 
+  // Auth / welcome message
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setIsLoggedIn(false);
+      setMessage("Welcome! Please log in to access full features.");
+      return;
+    }
+    setIsLoggedIn(true);
+    axios
+      .get("http://localhost:4000/api/dashboard", {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      .then((res) => setMessage(res.data.message))
+      .catch(() => {
+        localStorage.removeItem("token");
+        setIsLoggedIn(false);
+        setMessage("Welcome! Please log in.");
+      });
+  }, []);
+
+  // Campaigns: days since last, stats, recent campaign
+  useEffect(() => {
+    axios.get("http://localhost:4000/api/campaigns")
+      .then(res => {
+        const data = res.data || [];
+
+        if (data.length > 0) {
+          const lastDate = new Date(data[0].created_at);
+          const today = new Date();
+          const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+          const lastMidnight = new Date(lastDate.getFullYear(), lastDate.getMonth(), lastDate.getDate());
+          const days = Math.round((todayMidnight - lastMidnight) / (1000 * 60 * 60 * 24));
+          setDaysSinceLastCampaign(days);
+          setRecentCampaign(data[0]);
+        } else {
+          setDaysSinceLastCampaign(null);
+          setRecentCampaign(null);
+        }
+
+        const totalEmailsSent = data.reduce((sum, c) => sum + (Number(c.emails_sent) || 0), 0);
+        const totalClicks = data.reduce((sum, c) => sum + (Number(c.total_clicks) || 0), 0);
+        const overallClickRate = totalEmailsSent > 0
+          ? Math.round((totalClicks / totalEmailsSent) * 100)
+          : 0;
+
+        setStats({
+          totalCampaigns: data.length,
+          totalEmailsSent,
+          overallClickRate,
+        });
+      })
+      .catch(err => console.error("Failed to load campaigns:", err));
+  }, []);
+
+  // Total recipients count
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    axios.get("http://localhost:4000/api/recipients", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(res => setTotalRecipients(res.data.length))
+      .catch(() => setTotalRecipients(null));
+  }, []);
+
+  // Top phishing news
   useEffect(() => {
     axios.get("http://localhost:4000/api/news?q=phishing")
       .then(res => {
-        setTopNews(res.data.slice(0, 3)); // only top 3
+        setTopNews(res.data.filter(a => a.image).slice(0, 3));
         setLoadingNews(false);
       })
       .catch(err => {
@@ -57,185 +103,14 @@ export default function Dashboard() {
       });
   }, []);
 
-  // Existing auth / welcome message
-  useEffect(() => {
-  const token = localStorage.getItem("token");
-
-  if (!token) {
-    setIsLoggedIn(false);
-    setMessage("Welcome! Please log in to access full features.");
-    return;
-  }
-
-  setIsLoggedIn(true);
-
-  axios
-    .get("http://localhost:4000/api/dashboard", {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    .then((res) => setMessage(res.data.message))
-    .catch(() => {
-      localStorage.removeItem("token");
-      setIsLoggedIn(false);
-      setMessage("Welcome! Please log in.");
-    });
-}, []);
-
-  // Load links for analytics on mount
-  useEffect(() => {
-    axios
-      .get("http://localhost:4000/api/links")
-      .then((res) => {
-        const obj = res.data || {};
-        setLinks(Object.values(obj));
-      })
-      .catch((err) => {
-        console.error(err);
-      });
-  }, []);
-
-  // Load recipients for the create-link modal
-  useEffect(() => {
-    axios
-      .get("http://localhost:4000/api/recipients")
-      .then((res) => setRecipients(res.data))
-      .catch((err) => console.error("Failed to load recipients", err));
-  }, []);
-
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    window.location.href = "/dashboard";
-  };
-
-  const handleAddEmail = () => {
-    setEmailMessage("");
-    setEmailError("");
-
-    if (!newEmail) return setEmailError("Email cannot be empty");
-
-    axios
-      .post("http://localhost:4000/api/recipients", { email: newEmail })
-      .then((res) => {
-        setEmailMessage(res.data.message);
-        setNewEmail("");
-      })
-      .catch((err) => {
-        setEmailError(err.response?.data?.error || "Failed to add email");
-      });
-  };
-
-  const handleCreateCampaign = () => {
-    navigate("/create-campaign");
-  };
-
-  // Load analytics for a specific short link
-  const handleViewAnalytics = async (linkId) => {
-    if (!isLoggedIn) return;
-    setSelectedLinkId(linkId);
-    setAnalytics(null);
-    setAnalyticsError("");
-    setLoadingAnalytics(true);
-
-    try {
-      const res = await axios.get(
-        `http://localhost:4000/api/analytics/${linkId}`
-      );
-      setAnalytics({
-        link: res.data.link || null,
-        totalClicks: res.data.totalClicks || 0,
-        uniqueUsers: res.data.uniqueUsers || 0,
-        perDay: res.data.perDay || {},
-        uaCounts: res.data.uaCounts || {},
-      });
-    } catch (err) {
-      console.error(err);
-      setAnalyticsError(err.response?.data?.error || "Failed to load analytics");
-    } finally {
-      setLoadingAnalytics(false);
-    }
-  };
-
-  // 🔹 Create-link modal helpers
-  const openCreateModal = () => {
-    setCreateLinkError("");
-    setNewLinkUrl("");
-    setNewLinkName("");
-    setIsCreateModalOpen(true);
-  };
-
-  const closeCreateModal = () => {
-    if (createLinkLoading) return;
-    setIsCreateModalOpen(false);
-  };
-
-  const handleCreateLink = async (e) => {
-    if (!isLoggedIn) return;
-    e.preventDefault();
-    setCreateLinkError("");
-
-    if (!newLinkUrl.trim()) {
-      setCreateLinkError("Target URL is required.");
-      return;
-    }
-
-    setCreateLinkLoading(true);
-    try {
-      const res = await axios.post("http://localhost:4000/api/links", {
-        url: newLinkUrl.trim(),
-        name: newLinkName.trim() || null,
-      });
-
-      const created = res.data; // { id, shortUrl, target }
-
-      // Add new link into list so it shows in the left panel
-      setLinks((prev) => [
-        ...prev,
-        {
-          id: created.id,
-          url: created.target,
-          name: newLinkName.trim() || null,
-          createdAt: new Date().toISOString(),
-        },
-      ]);
-
-      // Auto-select and load analytics for the new link
-      handleViewAnalytics(created.id);
-
-      setIsCreateModalOpen(false);
-    } catch (err) {
-      console.error(err);
-      setCreateLinkError(
-        err.response?.data?.error || "Failed to create tracking link"
-      );
-    } finally {
-      setCreateLinkLoading(false);
-    }
-  };
-
-  const handleDeleteLink = async (linkId) => {
-    if (!isLoggedIn) return;
-    if (!window.confirm("Are you sure you want to delete this tracking link?")) return;
-
-    try {
-      await axios.delete(`http://localhost:4000/api/links/${linkId}`);
-      setLinks((prev) => prev.filter((link) => link.id !== linkId));
-
-      if (selectedLinkId === linkId) {
-        setSelectedLinkId(null);
-        setAnalytics(null);
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Failed to delete link: " + (err.response?.data?.error || err.message));
-    }
-  };
+  const recentClickRate = recentCampaign && Number(recentCampaign.emails_sent) > 0
+    ? Math.round((Number(recentCampaign.total_clicks) / Number(recentCampaign.emails_sent)) * 100)
+    : 0;
 
   return (
     <div className="dashboard-container">
       <Sidebar />
 
-      {/* Main content */}
       <div className="dashboard-main">
         <h1>Dashboard</h1>
         <p className="dashboard-message">{message}</p>
@@ -244,188 +119,97 @@ export default function Dashboard() {
           <div className="guest-info">
             <p>
               You are currently browsing as a guest.
-              Log in to create campaigns, manage links, and view analytics.
+              Log in to create campaigns and view analytics.
             </p>
           </div>
         )}
 
+        {/* Campaign Overview Widget */}
         {isLoggedIn && (
-        <div className="days-since-widget">
-          <p className="days-widget-label">Days Since Last Campaign</p>
-          <p
-            className="days-widget-number"
-            style={{ color: getDaysColor(daysSinceLastCampaign) }}
-          >
-            {daysSinceLastCampaign}
-          </p>
-        </div>
-        )}
-
-        {isLoggedIn  && (
-        <div className="dashboard-actions">
-          <button className="ap-button" onClick={handleCreateCampaign}>
-            Create Campaign
-          </button>
-          <button
-            className="ap-button ap-button-secondary"
-            onClick={openCreateModal}
-          >
-            Create Tracking Link
-          </button>
-        </div>
-        )}
-        {/* Analytics Section */}
-        {isLoggedIn && (
-        <section className="analytics-section">
-          <h2 className="analytics-title">Link Analytics</h2>
-
-          <div className="analytics-layout">
-            {/* Left: list of links */}
-            <div className="analytics-list-card">
-              <h3 className="analytics-subtitle">Tracked Links</h3>
-              {links.length === 0 && (
-                <p className="analytics-muted">No tracking links created yet.</p>
-              )}
-
-              <ul className="analytics-list">
-                {links.map((link) => (
-                  <li
-                    key={link.id}
-                    className={
-                      "analytics-list-item" +
-                      (selectedLinkId === link.id ? " selected" : "")
-                    }
+          <div className="campaign-overview-widget">
+            <p className="cow-header">Campaign Overview</p>
+            <div className="cow-body">
+              {/* Left: days counter + launch button */}
+              <div className="cow-left">
+                <div>
+                  <p
+                    className="cow-days-number"
+                    style={{ color: getDaysColor(daysSinceLastCampaign) }}
                   >
-                    <div className="analytics-link-main">
-                      <span className="analytics-link-name">
-                        {link.name || link.url}
-                      </span>
-                      <span className="analytics-link-id">ID: {link.id}</span>
+                    {daysSinceLastCampaign !== null ? daysSinceLastCampaign : "—"}
+                  </p>
+                  <p className="cow-days-label">Days Since Last Campaign</p>
+                </div>
+                <button className="cow-launch-btn" onClick={() => navigate("/create-campaign")}>
+                  Launch Campaign →
+                </button>
+              </div>
+
+              {stats && (
+                <>
+                  <div className="cow-vdivider" />
+                  {/* Right: 2x2 stats grid */}
+                  <div className="cow-stats">
+                    <div className="cow-stat">
+                      <p className="cow-stat-value">{stats.totalCampaigns}</p>
+                      <p className="cow-stat-label">Campaigns</p>
                     </div>
-
-                    <div className="analytics-link-actions">
-                      <button
-                        className="analytics-button"
-                        onClick={() => handleViewAnalytics(link.id)}
-                      >
-                        View Analytics
-                      </button>
-                      <button
-                        className="analytics-button delete"
-                        onClick={() => handleDeleteLink(link.id)}
-                      >
-                        Delete
-                      </button>
+                    <div className="cow-stat">
+                      <p className="cow-stat-value">{stats.totalEmailsSent}</p>
+                      <p className="cow-stat-label">Emails Sent</p>
                     </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Right: details for selected link */}
-            <div className="analytics-details-card">
-              <h3 className="analytics-subtitle">Details</h3>
-
-              {loadingAnalytics && (
-                <p className="analytics-muted">Loading analytics...</p>
-              )}
-
-              {analyticsError && <p className="error">{analyticsError}</p>}
-
-              {!loadingAnalytics && !analytics && !analyticsError && (
-                <p className="analytics-muted">
-                  Select a link on the left to view analytics.
-                </p>
-              )}
-
-              {analytics && analytics.link && !loadingAnalytics && (
-                <div className="analytics-details">
-                  {analytics.link.url && (
-                    <p>
-                      <span className="analytics-label">Target URL:</span>{" "}
-                      <span className="analytics-value">{analytics.link.url}</span>
-                    </p>
-                  )}
-                  {analytics.link.name && (
-                    <p>
-                      <span className="analytics-label">
-                        {analytics.link.url ? "Name:" : "Campaign:"}
-                      </span>{" "}
-                      <span className="analytics-value">{analytics.link.name}</span>
-                    </p>
-                  )}
-                  {analytics.link.employee && (
-                    <p>
-                      <span className="analytics-label">Employee:</span>{" "}
-                      <span className="analytics-value">{analytics.link.employee}</span>
-                    </p>
-                  )}
-                  <p>
-                    <span className="analytics-label">Short URL:</span>{" "}
-                    <span className="analytics-value">
-                      http://localhost:4000/r/{analytics.link.id}
-                    </span>
-                  </p>
-                  <p>
-                    <span className="analytics-label">Total Clicks:</span>{" "}
-                    <span className="analytics-value">
-                      {analytics.totalClicks}
-                    </span>
-                  </p>
-                  <p>
-                    <span className="analytics-label">Unique Users:</span>{" "}
-                    <span className="analytics-value">
-                      {analytics.uniqueUsers}
-                    </span>
-                  </p>
-                  <p>
-                    <span className="analytics-label">Result:</span>{" "}
-                    <span className={analytics.totalClicks > 0 ? "analytics-fail" : "analytics-pass"}>
-                      {analytics.totalClicks > 0 ? "Clicked (Fail)" : "No Clicks (Pass)"}
-                    </span>
-                  </p>
-
-                  <div className="analytics-grid">
-                    <div>
-                      <h4>Clicks Per Day</h4>
-                      {Object.keys(analytics.perDay).length === 0 ? (
-                        <p className="analytics-muted">No click data yet.</p>
-                      ) : (
-                        <ul className="analytics-mini-list">
-                          {Object.entries(analytics.perDay).map(([day, count]) => (
-                            <li key={day}>
-                              {day}: {count}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
+                    <div className="cow-stat">
+                      <p className="cow-stat-value">{stats.overallClickRate}%</p>
+                      <p className="cow-stat-label">Click Rate</p>
                     </div>
-
-                    <div>
-                      <h4>User Agents</h4>
-                      {Object.keys(analytics.uaCounts).length === 0 ? (
-                        <p className="analytics-muted">No user agent data.</p>
-                      ) : (
-                        <ul className="analytics-mini-list">
-                          {Object.entries(analytics.uaCounts).map(([ua, count]) => (
-                            <li key={ua}>
-                              {ua}: {count}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
+                    <div className="cow-stat">
+                      <p className="cow-stat-value">{totalRecipients ?? "—"}</p>
+                      <p className="cow-stat-label">Recipients</p>
                     </div>
                   </div>
-                </div>
+                </>
               )}
             </div>
           </div>
-        </section>
         )}
-        {/* 🔹 Top 3 News Widget */}
+
+        {/* Most Recent Campaign */}
+        {isLoggedIn && recentCampaign && (
+          <div className="recent-campaign-card">
+            <p className="recent-campaign-header">Most Recent Campaign</p>
+            <p className="recent-campaign-name">{recentCampaign.name}</p>
+            <div className="recent-campaign-stats">
+              <div className="recent-stat">
+                <span className="recent-stat-value">{recentCampaign.emails_sent ?? 0}</span>
+                <span className="recent-stat-label">Sent</span>
+              </div>
+              <div className="recent-stat">
+                <span className="recent-stat-value">{recentCampaign.total_clicks ?? 0}</span>
+                <span className="recent-stat-label">Clicks</span>
+              </div>
+              <div className="recent-stat">
+                <span className="recent-stat-value">{recentClickRate}%</span>
+                <span className="recent-stat-label">Click Rate</span>
+              </div>
+              <div className="recent-stat">
+                <span className="recent-stat-value">
+                  {new Date(recentCampaign.created_at).toLocaleDateString()}
+                </span>
+                <span className="recent-stat-label">Date</span>
+              </div>
+            </div>
+            <button
+              className="recent-campaign-link"
+              onClick={() => navigate("/analytics")}
+            >
+              View in Analytics →
+            </button>
+          </div>
+        )}
+
+        {/* Top Phishing News */}
         <section className="dashboard-news-section">
           <h2>Top Phishing News</h2>
-
           {loadingNews ? (
             <p>Loading news...</p>
           ) : (
@@ -456,63 +240,6 @@ export default function Dashboard() {
             </div>
           )}
         </section>
-
-        {/* 🔹 Create Tracking Link Modal */}
-        {isCreateModalOpen && isLoggedIn && (
-          <div className="modal-backdrop" onClick={closeCreateModal}>
-            <div
-              className="modal-card"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h3>Create Tracking Link</h3>
-              <form className="modal-form" onSubmit={handleCreateLink}>
-                <label>
-                  Target URL
-                  <input
-                    type="url"
-                    placeholder="https://example.com"
-                    value={newLinkUrl}
-                    onChange={(e) => setNewLinkUrl(e.target.value)}
-                  />
-                </label>
-
-                <label>
-                  Link Name (optional)
-                  <input
-                    type="text"
-                    placeholder="Internal name for this link"
-                    value={newLinkName}
-                    onChange={(e) => setNewLinkName(e.target.value)}
-                  />
-                </label>
-
-                {createLinkError && (
-                  <p className="error" style={{ marginTop: "4px" }}>
-                    {createLinkError}
-                  </p>
-                )}
-
-                <div className="modal-actions">
-                  <button
-                    type="button"
-                    className="modal-button ghost"
-                    onClick={closeCreateModal}
-                    disabled={createLinkLoading}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="modal-button primary"
-                    disabled={createLinkLoading}
-                  >
-                    {createLinkLoading ? "Creating..." : "Create Link"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

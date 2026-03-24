@@ -128,7 +128,7 @@ app.get("/api/dashboard", (req, res) => {
 // =====================================================
 
 app.post("/api/recipients", async (req, res) => {
-  const { firstName, lastName, email } = req.body;
+  const { firstName, lastName, email, department, jobTitle } = req.body;
   if (!email) return res.status(400).json({ error: "Email is required" });
 
   try {
@@ -137,6 +137,8 @@ app.post("/api/recipients", async (req, res) => {
         firstName: firstName || "",
         lastName: lastName || "",
         email,
+        department: department || null,
+        jobTitle: jobTitle || null,
       },
     });
 
@@ -158,6 +160,8 @@ app.get("/api/recipients", async (req, res) => {
         firstName: true,
         lastName: true,
         email: true,
+        department: true,
+        jobTitle: true,
       },
     });
 
@@ -210,19 +214,49 @@ app.post("/api/campaigns", async (req, res) => {
   }
 });
 
+app.get("/api/campaigns/:id/recipients", async (req, res) => {
+  const { id } = req.params;
+  try {
+    const [rows] = await db.query(`
+      SELECT
+        r.id,
+        r.first_name AS firstName,
+        r.last_name AS lastName,
+        r.email,
+        r.department,
+        r.job_title AS jobTitle,
+        COUNT(le.id) AS click_count,
+        MAX(le.created_at) AS last_clicked_at,
+        (SELECT le2.user_agent FROM link_events le2
+         WHERE le2.phishing_link_id = pl.id
+         ORDER BY le2.created_at DESC LIMIT 1) AS last_user_agent
+      FROM phishing_links pl
+      JOIN recipients r ON r.id = pl.recipient_id
+      LEFT JOIN link_events le ON le.phishing_link_id = pl.id
+      WHERE pl.campaign_id = ?
+      GROUP BY pl.id, r.id
+      ORDER BY r.last_name, r.first_name
+    `, [id]);
+    res.json(rows);
+  } catch (err) {
+    console.error("Campaign recipients fetch error:", err);
+    res.status(500).json({ error: "Failed to fetch campaign recipients" });
+  }
+});
+
 app.get("/api/campaigns", async (req, res) => {
   try {
-    const campaigns = await prisma.campaigns.findMany({
-      orderBy: { created_at: "desc" }, // order by created_at descending
-      select: {
-        id: true,
-        name: true,
-        difficulty: true,
-        created_at: true,
-      },
-    });
-
-    res.json(campaigns);
+    const [rows] = await db.query(`
+      SELECT c.id, c.name, c.difficulty, c.created_at,
+        COUNT(DISTINCT pl.id) AS emails_sent,
+        COUNT(DISTINCT le.id) AS total_clicks
+      FROM campaigns c
+      LEFT JOIN phishing_links pl ON pl.campaign_id = c.id
+      LEFT JOIN link_events le ON le.phishing_link_id = pl.id
+      GROUP BY c.id
+      ORDER BY c.created_at DESC
+    `);
+    res.json(rows);
   } catch (err) {
     console.error("Campaign fetch error:", err);
     res.status(500).json({ error: "Failed to fetch campaigns" });
@@ -506,7 +540,61 @@ app.get("/api/news", async (req, res) => {
   }
 });
 
+// =====================================================
+// ANALYTICS INSIGHTS
+// =====================================================
+
+// Top 5 most-clicked recipients across all campaigns
+app.get("/api/analytics/at-risk", async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT
+        r.id,
+        r.first_name AS firstName,
+        r.last_name AS lastName,
+        r.email,
+        r.department,
+        COUNT(DISTINCT pl.campaign_id) AS campaigns_targeted,
+        COUNT(le.id) AS total_clicks
+      FROM recipients r
+      JOIN phishing_links pl ON pl.recipient_id = r.id
+      LEFT JOIN link_events le ON le.phishing_link_id = pl.id
+      GROUP BY r.id, r.first_name, r.last_name, r.email, r.department
+      HAVING total_clicks > 0
+      ORDER BY total_clicks DESC
+      LIMIT 5
+    `);
+    res.json(rows);
+  } catch (err) {
+    console.error("At-risk fetch error:", err);
+    res.status(500).json({ error: "Failed to fetch at-risk employees" });
+  }
+});
+
+// Click rate broken down by department
+app.get("/api/analytics/department-risk", async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT
+        COALESCE(NULLIF(TRIM(r.department), ''), 'Unknown') AS department,
+        COUNT(DISTINCT pl.id) AS emails_sent,
+        COUNT(le.id) AS total_clicks,
+        ROUND(COUNT(le.id) / COUNT(DISTINCT pl.id) * 100, 1) AS click_rate
+      FROM recipients r
+      JOIN phishing_links pl ON pl.recipient_id = r.id
+      LEFT JOIN link_events le ON le.phishing_link_id = pl.id
+      GROUP BY COALESCE(NULLIF(TRIM(r.department), ''), 'Unknown')
+      HAVING emails_sent > 0
+      ORDER BY click_rate DESC
+    `);
+    res.json(rows);
+  } catch (err) {
+    console.error("Department risk fetch error:", err);
+    res.status(500).json({ error: "Failed to fetch department risk" });
+  }
+});
+
 registerAIGenerateRoute(app);
-registerSendCampaignRoute(app, db);
+registerSendCampaignRoute(app, db, prisma);
 
 app.listen(PORT, () => console.log(`🚀 Backend running on http://localhost:${PORT}`));
