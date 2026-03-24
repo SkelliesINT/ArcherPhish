@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Login.css"; // reuse existing styles
+import { useAuth } from "./AuthContext";
 
 
 const ROLE_TEMPLATES = {
@@ -36,17 +37,38 @@ export default function CreateCampaign() {
   const [existingLinks, setExistingLinks] = useState([]);
   const [selectedLinkId, setSelectedLinkId] = useState(null);
   const navigate = useNavigate();
+  const { user, permissions } = useAuth();
+  const isLoggedIn = !!user;
+  const canCreate = permissions.includes("create_campaign");
+  const canSend = permissions.includes("send_campaigns");
 
   useEffect(() => {
-    fetch("http://localhost:4000/api/links")
-      .then(res => res.json())
-      .then(data => {
-        const linksArray = Object.values(data);
+  if (!isLoggedIn || !canCreate) {
+    navigate("/dashboard");
+  }
+  }, [isLoggedIn, canCreate, navigate]);
+
+  useEffect(() => {
+    if (!canCreate) return;
+
+    const token = localStorage.getItem("token");
+
+    fetch("http://localhost:4000/api/links", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch links");
+        return res.json();
+      })
+      .then((data) => {
+        const linksArray = Array.isArray(data) ? data : Object.values(data);
         setExistingLinks(linksArray);
         if (linksArray.length > 0) setSelectedLinkId(linksArray[0].id);
       })
-      .catch(err => console.error("Failed to fetch links:", err));
-  }, []);
+      .catch((err) => console.error("Failed to fetch links:", err));
+  }, [canCreate]);
 
   const handleCancel = () => {
     navigate("/dashboard"); // go back to dashboard
@@ -67,6 +89,7 @@ export default function CreateCampaign() {
   };
 
   const handleGenerate = async () => {
+    if (!canCreate) return alert("You do not have permission to create campaigns.");
     if (!prompt.trim()) return alert("Prompt cannot be empty");
 
     setLoading(true);
@@ -100,30 +123,48 @@ export default function CreateCampaign() {
   };
 
   const handleApprove = async () => {
-    if (!generatedEmail) return alert("No generated email to send");
+    if (!canSend)
+      return alert("You do not have permission to send campaigns.");
 
-    if (!selectedLinkId) return alert("Please select a tracking link before sending.");
+    if (!generatedEmail)
+      return alert("No generated email to send");
 
-    const testOnly = window.confirm("Send test to a single recipient only? (OK = test, Cancel = send to all)");
+    if (!selectedLinkId)
+      return alert("Please select a tracking link before sending.");
+
+    const token = localStorage.getItem("token");
+
+    const testOnly = window.confirm(
+      "Send test to a single recipient only? (OK = test, Cancel = send to all)"
+    );
 
     try {
       const res = await fetch("http://localhost:4000/api/send-campaign", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           simulatedEmail: generatedEmail,
           testOnly,
-          linkId: selectedLinkId // 👈 use the existing link
+          linkId: selectedLinkId,
         }),
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to send campaign');
+      if (!res.ok) throw new Error(data.error || "Failed to send campaign");
 
-      alert(data.message + (data.details ? ` (${data.details.success}/${data.details.total})` : ''));
+      alert(
+        data.message +
+          (data.details
+            ? ` (${data.details.success}/${data.details.total})`
+            : "")
+      );
+
       setShowModal(false);
-      setGeneratedEmail('');
-      setPrompt('');
+      setGeneratedEmail("");
+      setPrompt("");
     } catch (err) {
       console.error(err);
       alert("Error sending campaign: " + err.message);

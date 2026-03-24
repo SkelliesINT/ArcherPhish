@@ -14,17 +14,19 @@ import {
 import "./Dashboard.css";
 import "./index.css";
 import "./Analytics.css";
+import { useAuth } from "./AuthContext";
+import Sidebar from "./Sidebar";
 
 export default function Analytics() {
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
+  const { permissions } = useAuth();
 
   useEffect(() => {
-    const user = JSON.parse(localStorage.getItem("user"));
-    if (!user || user.role !== "admin") {
-      navigate("/dashboard");
-    }
-  }, [navigate]);
+  if (!permissions.includes("view_all_analytics")) {
+    navigate("/dashboard");
+  }
+  }, [permissions, navigate]);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -78,43 +80,7 @@ export default function Analytics() {
 
   return (
     <div className="dashboard-container">
-      {/* Sidebar */}
-      <div className="sidebar">
-        <div className="sidebar-logo">
-          <img src="/logo2.png" alt="Logo part 1" className="logo-part1" />
-          <img src="/logo3.png" alt="Logo part 2" className="logo-part2" />
-        </div>
-
-        <div className="sidebar-icons">
-          <div className="sidebar-item" onClick={() => navigate("/dashboard")}>
-            <FaHome className="icon" />
-            <span className="label">Dashboard</span>
-          </div>
-
-          <div className="sidebar-item" onClick={() => navigate("/target-profiles")}>
-            <FaCrosshairs className="icon" />
-            <span className="label">Target Profiles</span>
-          </div>
-
-          <div className="sidebar-item">
-            <FaChartLine className="icon" />
-            <span className="label">Analytics</span>
-          </div>
-
-          <div className="sidebar-item" onClick={() => navigate("/news")}>
-            <FaNewspaper className="icon" />
-            <span className="label">News</span>
-          </div>
-        </div>
-
-        <div className="sidebar-bottom">
-          <div className="sidebar-item" onClick={handleLogout}>
-            <FaSignOutAlt className="icon" />
-            <span className="label">Logout</span>
-          </div>
-        </div>
-      </div>
-
+      <Sidebar />
       {/* Main content */}
       <div className="dashboard-main">
         <h1>Analytics</h1>

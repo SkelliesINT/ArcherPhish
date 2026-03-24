@@ -4,6 +4,7 @@ const nodemailer = require('nodemailer');
 const pLimit = require('p-limit');
 const fs = require('fs');
 const path = require('path');
+const { authenticateToken, requirePermission } = require("./middleware");
 
 const DATA_DIR = path.join(__dirname, 'data');
 const LINKS_FILE = path.join(DATA_DIR, 'links.json');
@@ -75,7 +76,8 @@ module.exports = function registerSendCampaignRoute(app, db) {
     return { from, subject, body };
   }
 
-  app.post('/api/send-campaign', async (req, res) => {
+  app.post('/api/send-campaign', authenticateToken, requirePermission("send_campaigns"),
+  async (req, res) => {
     try {
       const { simulatedEmail, testOnly, linkId } = req.body || {};
 

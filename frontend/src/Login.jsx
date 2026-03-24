@@ -3,29 +3,42 @@ import React, { useState } from "react";
 import { useNavigate} from "react-router-dom";
 import axios from "axios";
 import "./Login.css";
+import { useAuth } from "./AuthContext";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const { setUser } = useAuth();
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    try {
-      const res = await axios.post("http://localhost:4000/api/login", { email, password }, {
-        headers: { "Content-Type": "application/json" }
-      });
+  e.preventDefault();
+  setError("");
 
-      const { token, user } = res.data;
-      localStorage.setItem("token", token);
-      localStorage.setItem("user", JSON.stringify(user));
-      navigate("/dashboard");
-    } catch (err) {
-      setError(err.response?.data?.error || "Login failed — try again");
-    }
-  };
+  try {
+    const res = await axios.post(
+      "http://localhost:4000/api/login",
+      { email, password },
+      { headers: { "Content-Type": "application/json" } }
+    );
+
+    const { token, user } = res.data;
+
+    // Store JWT
+    localStorage.setItem("token", token);
+
+    // Store user info including permissions
+    localStorage.setItem("user", JSON.stringify(user));
+
+    // Update Auth context
+    setUser(user);
+
+    navigate("/dashboard");
+  } catch (err) {
+    setError(err.response?.data?.error || "Login failed — try again");
+  }
+};
 
   return (
     <div className="ap-page">

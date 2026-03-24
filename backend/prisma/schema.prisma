@@ -44,12 +44,47 @@ model recipients {
 }
 
 model users {
-  id         Int       @id @default(autoincrement())
-  email      String    @unique(map: "email")
-  password   String    @db.VarChar(255)
-  created_at DateTime? @default(now()) @db.Timestamp(0)
-  roles      String?   @db.VarChar(20)
-  role       String    @default("admin") @db.VarChar(20)
+  id         Int          @id @default(autoincrement())
+  email      String       @unique(map: "email")
+  password   String       @db.VarChar(255)
+  created_at DateTime?    @default(now()) @db.Timestamp(0)
+  roles      String?      @db.VarChar(255)
+  user_roles user_roles[]
+}
+
+model permissions {
+  id               Int                @id @default(autoincrement())
+  name             String             @unique(map: "name") @db.VarChar(100)
+  role_permissions role_permissions[]
+}
+
+model role_permissions {
+  role_id       Int
+  permission_id Int
+  
+  roles       roles       @relation(fields: [role_id], references: [id], map: "fk_role_permissions_role")
+  permission  permissions @relation(fields: [permission_id], references: [id], map: "fk_role_permissions_permission")
+
+  @@id([role_id, permission_id])
+  @@index([permission_id], map: "fk_role_permissions_permission")
+}
+
+model roles {
+  id               Int                @id @default(autoincrement())
+  name             String             @unique(map: "name") @db.VarChar(50)
+  user_roles       user_roles[]  // relation to junction table
+  role_permissions role_permissions[]
+}
+
+model user_roles {
+  user_id Int
+  role_id Int
+  
+  users users @relation(fields: [user_id], references: [id], map: "fk_user_roles_user")
+  role  roles @relation(fields: [role_id], references: [id], map: "fk_user_roles_role")
+
+  @@id([user_id, role_id])
+  @@index([role_id], map: "fk_user_roles_role")
 }
 
 enum campaigns_difficulty {

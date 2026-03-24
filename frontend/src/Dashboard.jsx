@@ -6,6 +6,7 @@ import { FaCrosshairs, FaChartLine, FaSignOutAlt, FaNewspaper } from "react-icon
 import "./Dashboard.css";
 import "./index.css";
 import Sidebar from "./Sidebar";
+import { useAuth } from "./AuthContext";
 
 
 export default function Dashboard() {
@@ -14,6 +15,9 @@ export default function Dashboard() {
   const [emailMessage, setEmailMessage] = useState("");
   const [emailError, setEmailError] = useState("");
   const navigate = useNavigate();
+  const { user, permissions, setUser } = useAuth();
+  const isLoggedIn = !!user;
+
 
   // 🔹 Analytics state
   const [links, setLinks] = useState([]);
@@ -29,9 +33,6 @@ export default function Dashboard() {
   const [newLinkName, setNewLinkName] = useState("");
   const [createLinkError, setCreateLinkError] = useState("");
   const [createLinkLoading, setCreateLinkLoading] = useState(false);
-
-  // Existing auth / welcome message
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   // Top News state
   const [topNews, setTopNews] = useState([]);
@@ -62,21 +63,23 @@ export default function Dashboard() {
   const token = localStorage.getItem("token");
 
   if (!token) {
-    setIsLoggedIn(false);
+    setUser(null); // update AuthContext
     setMessage("Welcome! Please log in to access full features.");
     return;
   }
-
-  setIsLoggedIn(true);
 
   axios
     .get("http://localhost:4000/api/dashboard", {
       headers: { Authorization: `Bearer ${token}` },
     })
-    .then((res) => setMessage(res.data.message))
+    .then((res) => {
+      // If API returns user info, store it in context
+      setUser(res.data.user);
+      setMessage(res.data.message);
+    })
     .catch(() => {
       localStorage.removeItem("token");
-      setIsLoggedIn(false);
+      setUser(null); // not logged in
       setMessage("Welcome! Please log in.");
     });
 }, []);
@@ -84,14 +87,14 @@ export default function Dashboard() {
   // Load links for analytics on mount
   useEffect(() => {
     axios
-      .get("http://localhost:4000/api/links")
+      .get("http://localhost:4000/api/links", {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
+      })
       .then((res) => {
         const obj = res.data || {};
         setLinks(Object.values(obj));
       })
-      .catch((err) => {
-        console.error(err);
-      });
+      .catch((err) => console.error(err));
   }, []);
 
   // Load recipients for the create-link modal
@@ -132,15 +135,25 @@ export default function Dashboard() {
   // Load analytics for a specific short link
   const handleViewAnalytics = async (linkId) => {
     if (!isLoggedIn) return;
+
     setSelectedLinkId(linkId);
     setAnalytics(null);
     setAnalyticsError("");
     setLoadingAnalytics(true);
 
     try {
+      const token = localStorage.getItem("token"); // ⚡ get token
+      if (!token) throw new Error("User not authenticated");
+
       const res = await axios.get(
-        `http://localhost:4000/api/analytics/${linkId}`
+        `http://localhost:4000/api/analytics/${linkId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`, // ⚡ include token
+          },
+        }
       );
+
       setAnalytics({
         link: res.data.link || null,
         totalClicks: res.data.totalClicks || 0,
@@ -150,7 +163,7 @@ export default function Dashboard() {
       });
     } catch (err) {
       console.error(err);
-      setAnalyticsError(err.response?.data?.error || "Failed to load analytics");
+      setAnalyticsError(err.response?.data?.error || err.message || "Failed to load analytics");
     } finally {
       setLoadingAnalytics(false);
     }
@@ -170,48 +183,64 @@ export default function Dashboard() {
   };
 
   const handleCreateLink = async (e) => {
-    if (!isLoggedIn) return;
-    e.preventDefault();
-    setCreateLinkError("");
+      if (!isLoggedIn) return;
+      e.preventDefault();
+      setCreateLinkError("");
 
-    if (!newLinkUrl.trim()) {
-      setCreateLinkError("Target URL is required.");
-      return;
-    }
+      const trimmedUrl = newLinkUrl.trim();
+      const trimmedName = newLinkName.trim() || null;
 
-    setCreateLinkLoading(true);
-    try {
-      const res = await axios.post("http://localhost:4000/api/links", {
-        url: newLinkUrl.trim(),
-        name: newLinkName.trim() || null,
-      });
+      if (!trimmedUrl) {
+        setCreateLinkError("Target URL is required.");
+        return;
+      }
 
-      const created = res.data; // { id, shortUrl, target }
+      setCreateLinkLoading(true);
 
-      // Add new link into list so it shows in the left panel
-      setLinks((prev) => [
-        ...prev,
-        {
-          id: created.id,
-          url: created.target,
-          name: newLinkName.trim() || null,
-          createdAt: new Date().toISOString(),
-        },
-      ]);
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) throw new Error("User not authenticated");
 
-      // Auto-select and load analytics for the new link
-      handleViewAnalytics(created.id);
+        const res = await axios.post(
+          "http://localhost:4000/api/links",
+          {
+            url: trimmedUrl,
+            name: trimmedName,
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`, // ⚡ send token
+              "Content-Type": "application/json",
+            },
+          }
+        );
 
-      setIsCreateModalOpen(false);
-    } catch (err) {
-      console.error(err);
-      setCreateLinkError(
-        err.response?.data?.error || "Failed to create tracking link"
-      );
-    } finally {
-      setCreateLinkLoading(false);
-    }
-  };
+        const created = res.data; // { id, shortUrl, target }
+
+        // Add new link into list so it shows in the left panel
+        setLinks((prev) => [
+          ...prev,
+          {
+            id: created.id,
+            url: created.target,
+            name: trimmedName,
+            createdAt: new Date().toISOString(),
+          },
+        ]);
+
+        // Auto-select and load analytics for the new link
+        handleViewAnalytics(created.id);
+
+        setIsCreateModalOpen(false);
+      } catch (err) {
+        console.error(err);
+        setCreateLinkError(
+          err.response?.data?.error || err.message || "Failed to create tracking link"
+        );
+      } finally {
+        setCreateLinkLoading(false);
+      }
+    };
 
   const handleDeleteLink = async (linkId) => {
     if (!isLoggedIn) return;
@@ -250,79 +279,87 @@ export default function Dashboard() {
         )}
 
         {isLoggedIn && (
-        <div className="days-since-widget">
-          <p className="days-widget-label">Days Since Last Campaign</p>
-          <p
-            className="days-widget-number"
-            style={{ color: getDaysColor(daysSinceLastCampaign) }}
-          >
-            {daysSinceLastCampaign}
-          </p>
-        </div>
+          <div className="days-since-widget">
+            <p className="days-widget-label">Days Since Last Campaign</p>
+            <p
+              className="days-widget-number"
+              style={{ color: getDaysColor(daysSinceLastCampaign) }}
+            >
+              {daysSinceLastCampaign}
+            </p>
+          </div>
         )}
 
-        {isLoggedIn  && (
-        <div className="dashboard-actions">
-          <button className="ap-button" onClick={handleCreateCampaign}>
-            Create Campaign
-          </button>
-          <button
-            className="ap-button ap-button-secondary"
-            onClick={openCreateModal}
-          >
-            Create Tracking Link
-          </button>
-        </div>
+        {/* Action buttons */}
+        {isLoggedIn && (
+          <div className="dashboard-actions">
+            {permissions.includes("create_campaign") && (
+              <button className="ap-button" onClick={handleCreateCampaign}>
+                Create Campaign
+              </button>
+            )}
+            {permissions.includes("manage_recipients") && (
+              <button
+                className="ap-button ap-button-secondary"
+                onClick={openCreateModal}
+              >
+                Create Tracking Link
+              </button>
+            )}
+          </div>
         )}
         {/* Analytics Section */}
-        {isLoggedIn && (
-        <section className="analytics-section">
-          <h2 className="analytics-title">Link Analytics</h2>
+  {isLoggedIn && permissions.includes("view_all_analytics") && (
+    <section className="analytics-section">
+      <h2 className="analytics-title">Link Analytics</h2>
 
-          <div className="analytics-layout">
-            {/* Left: list of links */}
-            <div className="analytics-list-card">
-              <h3 className="analytics-subtitle">Tracked Links</h3>
-              {links.length === 0 && (
-                <p className="analytics-muted">No tracking links created yet.</p>
-              )}
+      <div className="analytics-layout">
+        {/* Left: list of links */}
+        <div className="analytics-list-card">
+          <h3 className="analytics-subtitle">Tracked Links</h3>
+          {links.length === 0 && (
+            <p className="analytics-muted">No tracking links created yet.</p>
+          )}
 
-              <ul className="analytics-list">
-                {links.map((link) => (
-                  <li
-                    key={link.id}
-                    className={
-                      "analytics-list-item" +
-                      (selectedLinkId === link.id ? " selected" : "")
-                    }
+          <ul className="analytics-list">
+            {links.map((link) => (
+              <li
+                key={link.id}
+                className={
+                  "analytics-list-item" +
+                  (selectedLinkId === link.id ? " selected" : "")
+                }
+              >
+                <div className="analytics-link-main">
+                  <span className="analytics-link-name">
+                    {link.name || link.url}
+                  </span>
+                  <span className="analytics-link-id">ID: {link.id}</span>
+                </div>
+
+                <div className="analytics-link-actions">
+                  <button
+                    className="analytics-button"
+                    onClick={() => handleViewAnalytics(link.id)}
                   >
-                    <div className="analytics-link-main">
-                      <span className="analytics-link-name">
-                        {link.name || link.url}
-                      </span>
-                      <span className="analytics-link-id">ID: {link.id}</span>
-                    </div>
+                    View Analytics
+                  </button>
 
-                    <div className="analytics-link-actions">
-                      <button
-                        className="analytics-button"
-                        onClick={() => handleViewAnalytics(link.id)}
-                      >
-                        View Analytics
-                      </button>
-                      <button
-                        className="analytics-button delete"
-                        onClick={() => handleDeleteLink(link.id)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
+                  {permissions.includes("delete_link_events") && (
+                    <button
+                      className="analytics-button delete"
+                      onClick={() => handleDeleteLink(link.id)}
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
 
-            {/* Right: details for selected link */}
+        {/* Right: details for selected link */}
             <div className="analytics-details-card">
               <h3 className="analytics-subtitle">Details</h3>
 
@@ -368,19 +405,19 @@ export default function Dashboard() {
                   </p>
                   <p>
                     <span className="analytics-label">Total Clicks:</span>{" "}
-                    <span className="analytics-value">
-                      {analytics.totalClicks}
-                    </span>
+                    <span className="analytics-value">{analytics.totalClicks}</span>
                   </p>
                   <p>
                     <span className="analytics-label">Unique Users:</span>{" "}
-                    <span className="analytics-value">
-                      {analytics.uniqueUsers}
-                    </span>
+                    <span className="analytics-value">{analytics.uniqueUsers}</span>
                   </p>
                   <p>
                     <span className="analytics-label">Result:</span>{" "}
-                    <span className={analytics.totalClicks > 0 ? "analytics-fail" : "analytics-pass"}>
+                    <span
+                      className={
+                        analytics.totalClicks > 0 ? "analytics-fail" : "analytics-pass"
+                      }
+                    >
                       {analytics.totalClicks > 0 ? "Clicked (Fail)" : "No Clicks (Pass)"}
                     </span>
                   </p>
@@ -458,7 +495,7 @@ export default function Dashboard() {
         </section>
 
         {/* 🔹 Create Tracking Link Modal */}
-        {isCreateModalOpen && isLoggedIn && (
+        {isCreateModalOpen && isLoggedIn && permissions.includes("manage_recipients") && (
           <div className="modal-backdrop" onClick={closeCreateModal}>
             <div
               className="modal-card"

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "./AuthContext";
 import axios from "axios";
 import Sidebar from "./Sidebar";
 import "./Dashboard.css";
@@ -8,13 +9,16 @@ import "./TargetProfiles.css";
 export default function TargetProfiles() {
   const token = localStorage.getItem("token");
   const navigate = useNavigate();
+  const { user, permissions } = useAuth();
+  const isLoggedIn = !!user;
+  const canView = permissions.includes("view_recipients");
+  const canManage = permissions.includes("manage_recipients");
 
   useEffect(() => {
-    const user = JSON.parse(localStorage.getItem("user"));
-    if (!user || user.role !== "admin") {
+    if (!isLoggedIn || !canView) {
       navigate("/dashboard");
     }
-  }, [navigate]);
+  }, [isLoggedIn, canView, navigate]);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -33,6 +37,7 @@ export default function TargetProfiles() {
   // Fetch recipients
   const fetchRecipients = async () => {
     try {
+      const token = localStorage.getItem("token");
       const res = await axios.get("http://localhost:4000/api/recipients", {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -44,16 +49,18 @@ export default function TargetProfiles() {
   };
 
   useEffect(() => {
-    fetchRecipients();
-  }, []);
+    if (canView) fetchRecipients();
+  }, [canView]);
 
   // Add recipient
   const handleAdd = async () => {
     setMessage("");
     setError("");
     if (!newEmail) return setError("Email required");
+    if (!canManage) return setError("You do not have permission to add recipients");
 
     try {
+      const token = localStorage.getItem("token");
       const res = await axios.post(
         "http://localhost:4000/api/recipients",
         { firstName: newFirstName, lastName: newLastName, email: newEmail },
@@ -71,7 +78,10 @@ export default function TargetProfiles() {
 
   // Delete recipient
   const handleDelete = async (id) => {
+    if (!canManage) return setError("You do not have permission to delete recipients");
+
     try {
+      const token = localStorage.getItem("token");
       await axios.delete(`http://localhost:4000/api/recipients/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -95,32 +105,36 @@ export default function TargetProfiles() {
       <div className="dashboard-main">
         <h1>Target Profiles</h1>
 
-        <div className="add-recipient-container">
-          <div className="add-recipient-inputs">
-            <input
-              type="text"
-              placeholder="First Name"
-              value={newFirstName}
-              onChange={(e) => setNewFirstName(e.target.value)}
-            />
-            <input
-              type="text"
-              placeholder="Last Name"
-              value={newLastName}
-              onChange={(e) => setNewLastName(e.target.value)}
-            />
-            <input
-              type="email"
-              placeholder="Email"
-              value={newEmail}
-              onChange={(e) => setNewEmail(e.target.value)}
-            />
-            <button onClick={handleAdd}>Add</button>
+        {/* Add Recipient Form (permission-controlled) */}
+        {canManage && (
+          <div className="add-recipient-container">
+            <div className="add-recipient-inputs">
+              <input
+                type="text"
+                placeholder="First Name"
+                value={newFirstName}
+                onChange={(e) => setNewFirstName(e.target.value)}
+              />
+              <input
+                type="text"
+                placeholder="Last Name"
+                value={newLastName}
+                onChange={(e) => setNewLastName(e.target.value)}
+              />
+              <input
+                type="email"
+                placeholder="Email"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+              />
+              <button onClick={handleAdd}>Add</button>
+            </div>
+            {message && <p className="success">{message}</p>}
+            {error && <p className="error">{error}</p>}
           </div>
-          {message && <p className="success">{message}</p>}
-          {error && <p className="error">{error}</p>}
-        </div>
+        )}
 
+        {/* Search */}
         <div className="search-container">
           <input
             type="text"
@@ -130,6 +144,7 @@ export default function TargetProfiles() {
           />
         </div>
 
+        {/* Recipients Table */}
         <div className="recipient-table-container">
           <table className="recipient-table">
             <thead>
@@ -137,7 +152,7 @@ export default function TargetProfiles() {
                 <th>First Name</th>
                 <th>Last Name</th>
                 <th>Email</th>
-                <th>Actions</th>
+                {canManage && <th>Actions</th>}
               </tr>
             </thead>
             <tbody>
@@ -146,14 +161,21 @@ export default function TargetProfiles() {
                   <td>{r.firstName}</td>
                   <td>{r.lastName}</td>
                   <td>{r.email}</td>
-                  <td>
-                    <button className="delete-btn" onClick={() => handleDelete(r.id)}>Delete</button>
-                  </td>
+                  {canManage && (
+                    <td>
+                      <button
+                        className="delete-btn"
+                        onClick={() => handleDelete(r.id)}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
               {filteredRecipients.length === 0 && (
                 <tr>
-                  <td colSpan={4} style={{ textAlign: "center" }}>
+                  <td colSpan={canManage ? 4 : 3} style={{ textAlign: "center" }}>
                     No recipients found
                   </td>
                 </tr>
