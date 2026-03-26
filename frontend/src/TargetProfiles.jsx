@@ -29,6 +29,8 @@ export default function TargetProfiles() {
   const [searchTerm, setSearchTerm] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [csvFile, setCsvFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
 
   // Fetch recipients
   const fetchRecipients = async () => {
@@ -81,6 +83,51 @@ export default function TargetProfiles() {
     }
   };
 
+  // Handle CSV upload
+  const handleCSVUpload = async () => {
+    if (!csvFile) {
+      setError("Please select a CSV file");
+      return;
+    }
+
+    setUploading(true);
+    setMessage("");
+    setError("");
+
+    const formData = new FormData();
+    formData.append("file", csvFile);
+
+    try {
+      const res = await axios.post(
+        "http://localhost:4000/api/recipients/import",
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        }
+      );
+      setMessage(
+        `✅ ${res.data.message} (${res.data.success} imported, ${res.data.failed} failed)`
+      );
+      setCsvFile(null);
+      fetchRecipients();
+    } catch (err) {
+      setError(
+        err.response?.data?.error || "Failed to import CSV"
+      );
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Handle CSV export
+  const handleCSVExport = async () => {
+    try {
+      window.location.href = "http://localhost:4000/api/recipients/export";
+    } catch (err) {
+      setError("Failed to export recipients");
+    }
+  };
+
   // Filtered list
   const filteredRecipients = recipients.filter(
     (r) =>
@@ -119,6 +166,33 @@ export default function TargetProfiles() {
           </div>
           {message && <p className="success">{message}</p>}
           {error && <p className="error">{error}</p>}
+        </div>
+
+        <div className="csv-container">
+          <div className="csv-section">
+            <h3 className="csv-title">📤 Import Recipients</h3>
+            <p className="csv-description">Upload a CSV file with employee data to add multiple recipients at once.</p>
+            <div className="csv-upload">
+              <input
+                type="file"
+                accept=".csv"
+                onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
+              />
+              <button onClick={handleCSVUpload} disabled={uploading} className="upload-btn">
+                {uploading ? "Uploading..." : "Upload CSV"}
+              </button>
+            </div>
+          </div>
+
+          <div className="csv-divider"></div>
+
+          <div className="csv-section">
+            <h3 className="csv-title">📊 Export Campaign Results</h3>
+            <p className="csv-description">Download engagement metrics including targeted campaigns, click activity, and dates.</p>
+            <button className="export-btn" onClick={handleCSVExport}>
+              Download Results
+            </button>
+          </div>
         </div>
 
         <div className="search-container">

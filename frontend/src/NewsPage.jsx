@@ -33,11 +33,13 @@ export default function NewsPage() {
     fetch("http://localhost:4000/api/news?q=phishing")
       .then((res) => res.json())
       .then((data) => {
-        setArticles(data);
+        // Ensure data is always an array
+        setArticles(Array.isArray(data) ? data : []);
         setLoading(false);
       })
       .catch((err) => {
         console.error("Failed to load news:", err);
+        setArticles([]);
         setLoading(false);
       });
   }, []);

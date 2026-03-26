@@ -4,6 +4,9 @@ const nodemailer = require('nodemailer');
 const pLimit = require('p-limit');
 const fs = require('fs');
 const path = require('path');
+const { PrismaClient } = require('@prisma/client');
+
+const prisma = new PrismaClient();
 
 const DATA_DIR = path.join(__dirname, 'data');
 const LINKS_FILE = path.join(DATA_DIR, 'links.json');
@@ -19,9 +22,8 @@ function loadLinks() {
 }
 
 
-module.exports = function registerSendCampaignRoute(app, db) {
+module.exports = function registerSendCampaignRoute(app) {
   if (!app) throw new Error('Express app required');
-  if (!db) throw new Error('Database connection required');
 
   // create transporter from env (Gmail config example)
   const transporter = nodemailer.createTransport({
