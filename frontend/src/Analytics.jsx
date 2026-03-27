@@ -211,14 +211,12 @@ export default function Analytics() {
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart
                   data={deptRisk.map(d => ({ ...d, click_rate: Number(d.click_rate) }))}
-                  margin={{ top: 8, right: 16, left: 0, bottom: 40 }}
+                  margin={{ top: 8, right: 16, left: 0, bottom: 16 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="#2a2a35" />
                   <XAxis
                     dataKey="department"
                     tick={{ fill: "#aaa", fontSize: 11 }}
-                    angle={-30}
-                    textAnchor="end"
                     interval={0}
                   />
                   <YAxis

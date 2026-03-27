@@ -520,6 +520,60 @@ app.get("/r/:linkId", async (req, res) => {
   }
 });
 
+// =====================================================
+// ANALYTICS INSIGHTS
+// =====================================================
+
+// Top 5 most-clicked recipients across all campaigns
+app.get("/api/analytics/at-risk", async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT
+        r.id,
+        r.first_name AS firstName,
+        r.last_name AS lastName,
+        r.email,
+        r.department,
+        COUNT(DISTINCT pl.campaign_id) AS campaigns_targeted,
+        COUNT(le.id) AS total_clicks
+      FROM recipients r
+      JOIN phishing_links pl ON pl.recipient_id = r.id
+      LEFT JOIN link_events le ON le.phishing_link_id = pl.id
+      GROUP BY r.id, r.first_name, r.last_name, r.email, r.department
+      HAVING total_clicks > 0
+      ORDER BY total_clicks DESC
+      LIMIT 5
+    `);
+    res.json(rows);
+  } catch (err) {
+    console.error("At-risk fetch error:", err);
+    res.status(500).json({ error: "Failed to fetch at-risk employees" });
+  }
+});
+
+// Click rate broken down by department
+app.get("/api/analytics/department-risk", async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT
+        COALESCE(NULLIF(TRIM(r.department), ''), 'Unknown') AS department,
+        COUNT(DISTINCT pl.id) AS emails_sent,
+        COUNT(le.id) AS total_clicks,
+        ROUND(COUNT(le.id) / COUNT(DISTINCT pl.id) * 100, 1) AS click_rate
+      FROM recipients r
+      JOIN phishing_links pl ON pl.recipient_id = r.id
+      LEFT JOIN link_events le ON le.phishing_link_id = pl.id
+      GROUP BY COALESCE(NULLIF(TRIM(r.department), ''), 'Unknown')
+      HAVING emails_sent > 0
+      ORDER BY click_rate DESC
+    `);
+    res.json(rows);
+  } catch (err) {
+    console.error("Department risk fetch error:", err);
+    res.status(500).json({ error: "Failed to fetch department risk" });
+  }
+});
+
 // Unified analytics: check flat-file first, then DB
 app.get("/api/analytics/:linkId", async (req, res) => {
   const { linkId } = req.params;
@@ -658,60 +712,6 @@ app.get("/api/news", async (req, res) => {
   } catch (err) {
     console.error("NewsAPI error:", err.response?.data || err.message);
     res.status(500).json({ error: "Failed to fetch news" });
-  }
-});
-
-// =====================================================
-// ANALYTICS INSIGHTS
-// =====================================================
-
-// Top 5 most-clicked recipients across all campaigns
-app.get("/api/analytics/at-risk", async (req, res) => {
-  try {
-    const [rows] = await db.query(`
-      SELECT
-        r.id,
-        r.first_name AS firstName,
-        r.last_name AS lastName,
-        r.email,
-        r.department,
-        COUNT(DISTINCT pl.campaign_id) AS campaigns_targeted,
-        COUNT(le.id) AS total_clicks
-      FROM recipients r
-      JOIN phishing_links pl ON pl.recipient_id = r.id
-      LEFT JOIN link_events le ON le.phishing_link_id = pl.id
-      GROUP BY r.id, r.first_name, r.last_name, r.email, r.department
-      HAVING total_clicks > 0
-      ORDER BY total_clicks DESC
-      LIMIT 5
-    `);
-    res.json(rows);
-  } catch (err) {
-    console.error("At-risk fetch error:", err);
-    res.status(500).json({ error: "Failed to fetch at-risk employees" });
-  }
-});
-
-// Click rate broken down by department
-app.get("/api/analytics/department-risk", async (req, res) => {
-  try {
-    const [rows] = await db.query(`
-      SELECT
-        COALESCE(NULLIF(TRIM(r.department), ''), 'Unknown') AS department,
-        COUNT(DISTINCT pl.id) AS emails_sent,
-        COUNT(le.id) AS total_clicks,
-        ROUND(COUNT(le.id) / COUNT(DISTINCT pl.id) * 100, 1) AS click_rate
-      FROM recipients r
-      JOIN phishing_links pl ON pl.recipient_id = r.id
-      LEFT JOIN link_events le ON le.phishing_link_id = pl.id
-      GROUP BY COALESCE(NULLIF(TRIM(r.department), ''), 'Unknown')
-      HAVING emails_sent > 0
-      ORDER BY click_rate DESC
-    `);
-    res.json(rows);
-  } catch (err) {
-    console.error("Department risk fetch error:", err);
-    res.status(500).json({ error: "Failed to fetch department risk" });
   }
 });
 
