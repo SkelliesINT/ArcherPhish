@@ -8,6 +8,8 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const axios = require("axios");
+const multer = require("multer");
+const { parse } = require("csv-parse/sync");
 const { PrismaClient } = require("@prisma/client");
 
 const registerAIGenerateRoute = require("./aiGenerate");
@@ -184,6 +186,125 @@ app.delete("/api/recipients/:id", async (req, res) => {
   } catch (err) {
     console.error("Failed to delete recipient:", err);
     res.status(500).json({ error: "Failed to delete recipient" });
+  }
+});
+
+// =====================================================
+// CSV IMPORT / EXPORT
+// =====================================================
+
+const upload = multer({ storage: multer.memoryStorage() });
+
+// POST /api/recipients/import - Upload and parse CSV
+app.post("/api/recipients/import", upload.single("file"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+
+  try {
+    const csvText = req.file.buffer.toString("utf-8");
+    const records = parse(csvText, { columns: true, skip_empty_lines: true });
+
+    if (!records || records.length === 0) {
+      return res.status(400).json({ error: "CSV file is empty" });
+    }
+
+    const results = { success: 0, failed: 0, errors: [] };
+    const created = [];
+
+    for (const record of records) {
+      const firstName = (record.firstName || record.first_name || "").trim();
+      const lastName = (record.lastName || record.last_name || "").trim();
+      const email = (record.email || "").trim().toLowerCase();
+      const department = (record.department || "").trim();
+      const jobTitle = (record.jobTitle || record.job_title || "").trim();
+
+      if (!email) {
+        results.failed++;
+        results.errors.push({ row: record, error: "Missing email" });
+        continue;
+      }
+
+      try {
+        const recipient = await prisma.recipients.create({
+          data: { firstName, lastName, email, department, jobTitle },
+        });
+        created.push(recipient);
+        results.success++;
+      } catch (err) {
+        results.failed++;
+        results.errors.push({
+          row: record,
+          error: err.code === "P2002" ? "Email already exists" : err.message,
+        });
+      }
+    }
+
+    res.json({
+      message: `CSV import complete: ${results.success} imported, ${results.failed} failed`,
+      ...results,
+      created,
+    });
+  } catch (err) {
+    console.error("CSV import error:", err);
+    res.status(500).json({ error: `Failed to parse CSV: ${err.message}` });
+  }
+});
+
+// GET /api/recipients/export - Download recipients with campaign engagement results
+app.get("/api/recipients/export", async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT
+        r.id,
+        r.first_name AS firstName,
+        r.last_name  AS lastName,
+        r.email,
+        r.department,
+        r.job_title  AS jobTitle,
+        GROUP_CONCAT(DISTINCT c.name ORDER BY c.name SEPARATOR '; ') AS campaignsTargeted,
+        GROUP_CONCAT(DISTINCT CASE WHEN le.id IS NOT NULL THEN c.name END ORDER BY c.name SEPARATOR '; ') AS campaignsClicked,
+        COUNT(le.id) AS totalClicks,
+        MIN(le.created_at) AS firstClickDate,
+        MAX(le.created_at) AS lastClickDate
+      FROM recipients r
+      LEFT JOIN phishing_links pl ON pl.recipient_id = r.id
+      LEFT JOIN campaigns c ON c.id = pl.campaign_id
+      LEFT JOIN link_events le ON le.phishing_link_id = pl.id
+      GROUP BY r.id, r.first_name, r.last_name, r.email, r.department, r.job_title
+      ORDER BY r.last_name, r.first_name
+    `);
+
+    const enrichedData = rows.map((r) => ({
+      firstName: r.firstName || "",
+      lastName: r.lastName || "",
+      email: r.email || "",
+      department: r.department || "",
+      jobTitle: r.jobTitle || "",
+      campaignsTargeted: r.campaignsTargeted || "None",
+      campaignsClicked: r.campaignsClicked || "None",
+      totalClicks: r.totalClicks || 0,
+      firstClickDate: r.firstClickDate ? new Date(r.firstClickDate).toISOString().split("T")[0] : "N/A",
+      lastClickDate: r.lastClickDate ? new Date(r.lastClickDate).toISOString().split("T")[0] : "N/A",
+    }));
+
+    const headers = ["firstName", "lastName", "email", "department", "jobTitle", "campaigns_targeted", "campaigns_clicked", "total_clicks", "first_click_date", "last_click_date"];
+    const csvLines = [headers.join(",")];
+
+    for (const row of enrichedData) {
+      const esc = (v) => `"${String(v).replace(/"/g, '""')}"`;
+      csvLines.push([
+        esc(row.firstName), esc(row.lastName), esc(row.email),
+        esc(row.department), esc(row.jobTitle),
+        esc(row.campaignsTargeted), esc(row.campaignsClicked),
+        row.totalClicks, esc(row.firstClickDate), esc(row.lastClickDate),
+      ].join(","));
+    }
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", "attachment; filename=campaign_results.csv");
+    res.send(csvLines.join("\n"));
+  } catch (err) {
+    console.error("CSV export error:", err);
+    res.status(500).json({ error: `Failed to export: ${err.message}` });
   }
 });
 
