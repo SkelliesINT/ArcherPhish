@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Login.css"; // reuse existing styles
+import { useAuth } from "./AuthContext";
 
 
 const ROLE_TEMPLATES = {
@@ -34,7 +35,18 @@ export default function CreateCampaign() {
   const [generatedEmail, setGeneratedEmail] = useState(""); // new
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { user, permissions } = useAuth();
+  const isLoggedIn = !!user;
+  const canCreate = permissions.includes("create_campaign");
+  const canSend = permissions.includes("send_campaigns");
 
+  useEffect(() => {
+  if (!isLoggedIn || !canCreate) {
+    navigate("/dashboard");
+  }
+  }, [isLoggedIn, canCreate, navigate]);
+
+  
   const handleCancel = () => {
     navigate("/dashboard"); // go back to dashboard
   };
@@ -54,6 +66,7 @@ export default function CreateCampaign() {
   };
 
   const handleGenerate = async () => {
+    if (!canCreate) return alert("You do not have permission to create campaigns.");
     if (!prompt.trim()) return alert("Prompt cannot be empty");
 
     setLoading(true);
@@ -87,7 +100,12 @@ export default function CreateCampaign() {
   };
 
   const handleApprove = async () => {
+    if (!canSend)
+      return alert("You do not have permission to send campaigns.");
+
     if (!generatedEmail) return alert("No generated email to send");
+
+    const token = localStorage.getItem("token");
 
     const testOnly = window.confirm("Send test to a single recipient only? (OK = test, Cancel = send to all)");
 

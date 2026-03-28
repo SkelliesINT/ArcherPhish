@@ -10,17 +10,15 @@ import {
   FaGraduationCap
 } from "react-icons/fa";
 import "./Dashboard.css";
+import { useAuth } from "./AuthContext";
 
 export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation(); // get current path
+  const { user, permissions } = useAuth();
 
   const token = localStorage.getItem("token");
-  const isLoggedIn = !!token;
-
-  const user = JSON.parse(localStorage.getItem("user"));
-  const role = user?.role;
-  const isAdmin = role === "admin";
+  const isLoggedIn = !!user;
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -49,7 +47,7 @@ export default function Sidebar() {
         </div>
 
         {/* Target Profiles */}
-        {isAdmin && (
+        {permissions.includes("view_recipients") && (
         <div
           className={`sidebar-item ${isActive("/target-profiles") ? "active" : ""}`}
           onClick={() => navigate("/target-profiles")}
@@ -60,7 +58,7 @@ export default function Sidebar() {
         )}
 
         {/* Analytics */}
-        {isAdmin && (
+        {permissions.includes("view_all_analytics") && (
         <div
           className={`sidebar-item ${isActive("/analytics") ? "active" : ""}`}
           onClick={() => navigate("/analytics")}
@@ -78,12 +76,15 @@ export default function Sidebar() {
           <FaNewspaper className="icon" />
           <span className="label">News</span>
         </div>
+
+        {/* Training */}
         <div className={`sidebar-item ${isActive("/training") ? "active" : ""}`}
           onClick={() => navigate("/training")}>
         <FaGraduationCap className="icon" />
         <span className="label">Training</span>
        </div>
       </div>
+
        <div className="sidebar-bottom">
         {!isLoggedIn ? (
           <div className="sidebar-item" onClick={() => navigate("/login")}>

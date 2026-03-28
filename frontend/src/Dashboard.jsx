@@ -5,10 +5,10 @@ import { useNavigate } from "react-router-dom";
 import "./Dashboard.css";
 import "./index.css";
 import Sidebar from "./Sidebar";
+import { useAuth } from "./AuthContext";
 
 export default function Dashboard() {
   const [message, setMessage] = useState("Welcome back!");
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [topNews, setTopNews] = useState([]);
   const [loadingNews, setLoadingNews] = useState(true);
   const [daysSinceLastCampaign, setDaysSinceLastCampaign] = useState(null);
@@ -16,6 +16,8 @@ export default function Dashboard() {
   const [recentCampaign, setRecentCampaign] = useState(null);
   const [totalRecipients, setTotalRecipients] = useState(null);
   const navigate = useNavigate();
+  const { user, permissions, setUser } = useAuth();
+  const isLoggedIn = !!user;
 
   const getDaysColor = (days) => {
     if (days === null) return "#aaa";
@@ -27,27 +29,37 @@ export default function Dashboard() {
   // Auth / welcome message
   useEffect(() => {
     const token = localStorage.getItem("token");
+
     if (!token) {
-      setIsLoggedIn(false);
+      setUser(null); // update AuthContext
       setMessage("Welcome! Please log in to access full features.");
       return;
     }
-    setIsLoggedIn(true);
+
     axios
       .get("http://localhost:4000/api/dashboard", {
         headers: { Authorization: `Bearer ${token}` },
       })
-      .then((res) => setMessage(res.data.message))
+      .then((res) => {
+        // If API returns user info, store it in context
+        setUser(res.data.user);
+        setMessage(res.data.message);
+      })
       .catch(() => {
         localStorage.removeItem("token");
-        setIsLoggedIn(false);
+        setUser(null); // not logged in
         setMessage("Welcome! Please log in.");
       });
   }, []);
 
   // Campaigns: days since last, stats, recent campaign
   useEffect(() => {
-    axios.get("http://localhost:4000/api/campaigns")
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    axios.get("http://localhost:4000/api/campaigns", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
       .then(res => {
         const data = res.data || [];
 
@@ -125,7 +137,7 @@ export default function Dashboard() {
         )}
 
         {/* Campaign Overview Widget */}
-        {isLoggedIn && (
+        {isLoggedIn && permissions.includes("view_campaigns") && (
           <div className="campaign-overview-widget">
             <p className="cow-header">Campaign Overview</p>
             <div className="cow-body">
@@ -140,9 +152,11 @@ export default function Dashboard() {
                   </p>
                   <p className="cow-days-label">Days Since Last Campaign</p>
                 </div>
+                {permissions.includes("create_campaign") && (
                 <button className="cow-launch-btn" onClick={() => navigate("/create-campaign")}>
                   Launch Campaign →
                 </button>
+                )}
               </div>
 
               {stats && (
@@ -174,7 +188,7 @@ export default function Dashboard() {
         )}
 
         {/* Most Recent Campaign */}
-        {isLoggedIn && recentCampaign && (
+        {isLoggedIn && permissions.includes("view_campaigns") && recentCampaign && (
           <div className="recent-campaign-card">
             <p className="recent-campaign-header">Most Recent Campaign</p>
             <p className="recent-campaign-name">{recentCampaign.name}</p>
@@ -198,12 +212,14 @@ export default function Dashboard() {
                 <span className="recent-stat-label">Date</span>
               </div>
             </div>
-            <button
-              className="recent-campaign-link"
-              onClick={() => navigate("/analytics")}
-            >
-              View in Analytics →
-            </button>
+            {permissions.includes("view_all_analytics") && (
+              <button
+                className="recent-campaign-link"
+                onClick={() => navigate("/analytics")}
+              >
+                View in Analytics →
+              </button>
+            )}
           </div>
         )}
 
