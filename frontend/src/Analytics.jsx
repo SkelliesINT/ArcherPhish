@@ -40,7 +40,7 @@ function parseUA(ua) {
 
 function getBarColor(rate) {
   if (rate <= 20) return "#4caf50";
-  if (rate <= 40) return "#ffeb3b";
+  if (rate <= 40) return "#ff9800";
   return "#f44336";
 }
 
@@ -313,7 +313,10 @@ export default function Analytics() {
                                 )}
                                 {[...(recipientsCache[campaign.id] || [])].sort((a, b) => Number(b.click_count) - Number(a.click_count)).map(r => (
                                   <tr key={r.id}>
-                                    <td>{[r.firstName, r.lastName].filter(Boolean).join(" ") || "—"}</td>
+                                    <td>
+                                      {[r.firstName, r.lastName].filter(Boolean).join(" ") || "—"}
+                                      {r.highRisk ? <span className="high-risk-badge">HIGH RISK</span> : null}
+                                    </td>
                                     <td>{r.email}</td>
                                     <td>{r.department || "—"}</td>
                                     <td>{r.jobTitle || "—"}</td>

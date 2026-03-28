@@ -143,6 +143,22 @@
   color: #ddd !important;
 }
 
+/* High-risk badge */
+.high-risk-badge {
+  display: inline-block;
+  background-color: rgba(244, 67, 54, 0.15);
+  color: #f44336;
+  border: 1px solid #f44336;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 1px 5px;
+  margin-left: 7px;
+  vertical-align: middle;
+  text-transform: uppercase;
+}
+
 /* Clicked / not-clicked badges */
 .badge-clicked {
   background-color: #1a3a1a;

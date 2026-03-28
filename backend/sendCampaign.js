@@ -34,10 +34,9 @@ module.exports = function registerSendCampaignRoute(app, db, prisma) {
     } catch (e) {
     }
 
-    // Normalize and remove safety prefix if present
-    const safetyPrefix = 'SIMULATION - TRAINING PURPOSES ONLY - THIS IS JUST FOR EDUCATIONAL/PRACTICING PURPOSES';
+    // Normalize and remove safety prefix if present (handles any SIMULATION... variant)
     let text = (simulatedEmail || '').replace(/\r\n/g, '\n').trim();
-    if (text.startsWith(safetyPrefix)) text = text.slice(safetyPrefix.length).trim();
+    text = text.replace(/^SIMULATION[^\n]*\n*/i, '').trim();
 
     // Regex find From: and Subject:
     const fromMatch = text.match(/^\s*From:\s*(.+)$/im);
@@ -62,7 +61,7 @@ module.exports = function registerSendCampaignRoute(app, db, prisma) {
 
   app.post('/api/send-campaign', async (req, res) => {
     try {
-      const { simulatedEmail, testOnly } = req.body || {};
+      const { simulatedEmail, testOnly, departments } = req.body || {};
 
       if (!simulatedEmail || typeof simulatedEmail !== 'string') {
         return res.status(400).json({ error: 'simulatedEmail (string) is required' });
@@ -72,12 +71,17 @@ module.exports = function registerSendCampaignRoute(app, db, prisma) {
       // Keep rawBody with [SIMULATED LINK] intact so per-recipient tracking URLs can be substituted in sendOne
       const rawBody = body;
 
-      // fetch recipient list from DB
+      // fetch recipient list from DB, optionally filtered by department
+      const deptFilter = Array.isArray(departments) && departments.length > 0 ? departments : null;
       const recipientsData = await prisma.recipients.findMany({
+        where: deptFilter ? { department: { in: deptFilter } } : undefined,
         select: { id: true, email: true, firstName: true, lastName: true }
       });
 
       const recipients = recipientsData.filter(r => r.email);
+      if (deptFilter && recipients.length === 0) {
+        return res.json({ message: 'No recipients found in the selected department(s)' });
+      }
       if (recipients.length === 0) return res.json({ message: 'No recipients to send to' });
 
       const targets = testOnly ? recipients.slice(0, 1) : recipients;

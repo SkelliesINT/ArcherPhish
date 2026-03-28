@@ -14,6 +14,7 @@ const { PrismaClient } = require("@prisma/client");
 
 const registerAIGenerateRoute = require("./aiGenerate");
 const registerSendCampaignRoute = require("./sendCampaign");
+const registerSendHighRiskCampaignRoute = require("./sendHighRiskCampaign");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -37,6 +38,7 @@ const db = mysql.createPool({
 });
 
 console.log("✅ MySQL connection pool created");
+
 
 // =====================================================
 // AUTH
@@ -130,44 +132,43 @@ app.get("/api/dashboard", (req, res) => {
 // =====================================================
 
 app.post("/api/recipients", async (req, res) => {
-  const { firstName, lastName, email, department, jobTitle } = req.body;
+  const { firstName, lastName, email, department, jobTitle, highRisk, osintData } = req.body;
   if (!email) return res.status(400).json({ error: "Email is required" });
 
-  try {
-    const recipient = await prisma.recipients.create({
-      data: {
-        firstName: firstName || "",
-        lastName: lastName || "",
-        email,
-        department: department || null,
-        jobTitle: jobTitle || null,
-      },
-    });
+  const osintJson = (osintData && typeof osintData === "object") ? JSON.stringify(osintData) : null;
 
-    res.json({
-      message: "Recipient added successfully",
-      recipient,
-    });
+  try {
+    const [result] = await db.query(
+      `INSERT INTO recipients (first_name, last_name, email, department, job_title, high_risk, osint_data) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [firstName || "", lastName || "", email, department || null, jobTitle || null, highRisk ? 1 : 0, osintJson]
+    );
+    const [[recipient]] = await db.query(
+      `SELECT id, first_name AS firstName, last_name AS lastName, email, department, job_title AS jobTitle, high_risk AS highRisk, osint_data AS osintData FROM recipients WHERE id=?`,
+      [result.insertId]
+    );
+    recipient.highRisk = !!recipient.highRisk;
+    recipient.osintData = recipient.osintData ? JSON.parse(recipient.osintData) : null;
+    res.json({ message: "Recipient added successfully", recipient });
   } catch (err) {
     console.error("Failed to add recipient:", err);
+    if (err.code === "ER_DUP_ENTRY") return res.status(409).json({ error: "Email already exists" });
     res.status(500).json({ error: "Failed to add recipient" });
   }
 });
 
 app.get("/api/recipients", async (req, res) => {
   try {
-    const recipients = await prisma.recipients.findMany({
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        department: true,
-        jobTitle: true,
-      },
-    });
-
-    res.json(recipients);
+    const [rows] = await db.query(`
+      SELECT id, first_name AS firstName, last_name AS lastName,
+             email, department, job_title AS jobTitle, high_risk AS highRisk, osint_data AS osintData
+      FROM recipients
+      ORDER BY last_name, first_name
+    `);
+    res.json(rows.map(r => ({
+      ...r,
+      highRisk: !!r.highRisk,
+      osintData: r.osintData ? JSON.parse(r.osintData) : null,
+    })));
   } catch (err) {
     console.error("Recipient fetch error:", err);
     res.status(500).json({ error: "Failed to fetch recipients" });
@@ -186,6 +187,78 @@ app.delete("/api/recipients/:id", async (req, res) => {
   } catch (err) {
     console.error("Failed to delete recipient:", err);
     res.status(500).json({ error: "Failed to delete recipient" });
+  }
+});
+
+app.put("/api/recipients/:id", async (req, res) => {
+  const { id } = req.params;
+  const { firstName, lastName, email, department, jobTitle, highRisk, osintData } = req.body;
+  if (!email) return res.status(400).json({ error: "Email required" });
+
+  const osintJson = (osintData && typeof osintData === "object") ? JSON.stringify(osintData) : null;
+
+  try {
+    await db.query(
+      `UPDATE recipients SET first_name=?, last_name=?, email=?, department=?, job_title=?, high_risk=?, osint_data=? WHERE id=?`,
+      [firstName || "", lastName || "", email, department || null, jobTitle || null, highRisk ? 1 : 0, osintJson, parseInt(id)]
+    );
+    const [[updated]] = await db.query(
+      `SELECT id, first_name AS firstName, last_name AS lastName, email, department, job_title AS jobTitle, high_risk AS highRisk, osint_data AS osintData FROM recipients WHERE id=?`,
+      [parseInt(id)]
+    );
+    updated.highRisk = !!updated.highRisk;
+    updated.osintData = updated.osintData ? JSON.parse(updated.osintData) : null;
+    res.json(updated);
+  } catch (err) {
+    console.error("Failed to update recipient:", err);
+    res.status(500).json({ error: "Failed to update recipient" });
+  }
+});
+
+app.patch("/api/recipients/:id/high-risk", async (req, res) => {
+  const { id } = req.params;
+  try {
+    await db.query(`UPDATE recipients SET high_risk = NOT high_risk WHERE id=?`, [parseInt(id)]);
+    const [[updated]] = await db.query(
+      `SELECT id, high_risk AS highRisk FROM recipients WHERE id=?`,
+      [parseInt(id)]
+    );
+    res.json(updated);
+  } catch (err) {
+    console.error("Failed to toggle high risk:", err);
+    res.status(500).json({ error: "Failed to toggle high risk" });
+  }
+});
+
+// =====================================================
+// DEPARTMENTS
+// =====================================================
+
+app.get("/api/departments", async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT name FROM departments
+      UNION
+      SELECT DISTINCT department AS name FROM recipients
+        WHERE department IS NOT NULL AND TRIM(department) != ''
+      ORDER BY name
+    `);
+    res.json(rows.map(r => r.name));
+  } catch (err) {
+    console.error("Departments fetch error:", err);
+    res.status(500).json({ error: "Failed to fetch departments" });
+  }
+});
+
+app.post("/api/departments", async (req, res) => {
+  const { name } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: "Department name required" });
+  try {
+    await db.query("INSERT IGNORE INTO departments (name) VALUES (?)", [name.trim()]);
+    res.json({ name: name.trim() });
+  } catch (err) {
+    console.error("Department add error:", err);
+    res.status(500).json({ error: "Failed to add department" });
   }
 });
 
@@ -346,6 +419,7 @@ app.get("/api/campaigns/:id/recipients", async (req, res) => {
         r.email,
         r.department,
         r.job_title AS jobTitle,
+        r.high_risk AS highRisk,
         COUNT(le.id) AS click_count,
         MAX(le.created_at) AS last_clicked_at,
         (SELECT le2.user_agent FROM link_events le2
@@ -717,5 +791,45 @@ app.get("/api/news", async (req, res) => {
 
 registerAIGenerateRoute(app);
 registerSendCampaignRoute(app, db, prisma);
+registerSendHighRiskCampaignRoute(app, db);
 
-app.listen(PORT, () => console.log(`🚀 Backend running on http://localhost:${PORT}`));
+// Global error handler — ensures all unhandled errors return JSON, not HTML
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.error("Unhandled error:", err);
+  res.status(500).json({ error: err.message || "Internal server error" });
+});
+
+(async () => {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS departments (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL UNIQUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    const [colCheck] = await db.query(`
+      SELECT COUNT(*) AS cnt FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'recipients'
+        AND COLUMN_NAME = 'high_risk'
+    `);
+    if (colCheck[0].cnt === 0) {
+      await db.query(`ALTER TABLE recipients ADD COLUMN high_risk TINYINT(1) NOT NULL DEFAULT 0`);
+    }
+    const [osintColCheck] = await db.query(`
+      SELECT COUNT(*) AS cnt FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'recipients'
+        AND COLUMN_NAME = 'osint_data'
+    `);
+    if (osintColCheck[0].cnt === 0) {
+      await db.query(`ALTER TABLE recipients ADD COLUMN osint_data TEXT NULL`);
+    }
+    console.log("✅ DB migrations complete");
+  } catch (err) {
+    console.error("DB migration error:", err);
+  }
+  app.listen(PORT, () => console.log(`🚀 Backend running on http://localhost:${PORT}`));
+})();
