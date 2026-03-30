@@ -2,6 +2,74 @@
   padding: 20px;
 }
 
+/* Lock the Target Profiles page to viewport height so the table fills remaining space */
+.dashboard-main--fill {
+  overflow: hidden;
+}
+
+/* ── Organization name bar ───────────────────────────────────────────────── */
+.tp-company-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  background: #151519;
+  border: 1px solid #2a2a36;
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.tp-company-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #aaa;
+  white-space: nowrap;
+}
+
+.tp-company-input {
+  flex: 1;
+  background: #1e1e26;
+  border: 1px solid #333;
+  border-radius: 6px;
+  color: #e8eef1;
+  font-size: 13px;
+  padding: 6px 10px;
+  outline: none;
+  max-width: 280px;
+}
+
+.tp-company-input:focus {
+  border-color: #00e5ff;
+}
+
+.tp-company-save-btn {
+  background: rgba(0, 229, 255, 0.12);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  color: #00e5ff;
+  border-radius: 6px;
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.tp-company-save-btn:hover:not(:disabled) {
+  background: rgba(0, 229, 255, 0.22);
+}
+
+.tp-company-save-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tp-company-saved {
+  font-size: 12px;
+  color: #4caf50;
+}
+
 /* Add Recipient */
 .add-recipient-container {
   margin-bottom: 20px;
@@ -91,7 +159,8 @@
 
 /* Table */
 .recipient-table-container {
-  max-height: calc(40px * 7); /* 10 rows */
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   border: 1px solid #ccc;
   border-radius: 8px;

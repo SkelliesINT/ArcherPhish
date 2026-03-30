@@ -11,7 +11,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer
 } from "recharts";
 import "./Dashboard.css";
@@ -64,7 +63,10 @@ export default function Analytics() {
   const fetchCampaigns = () => {
     fetch("http://localhost:4000/api/campaigns")
       .then(res => res.json())
-      .then(data => setCampaigns(data))
+      .then(data => {
+        console.log("[Analytics] campaigns from API:", data.map(c => ({ name: c.name, emails_sent: c.emails_sent, total_clicks: c.total_clicks })));
+        setCampaigns(data);
+      })
       .catch(err => console.error("Failed to load campaigns:", err));
   };
 
@@ -103,11 +105,14 @@ export default function Analytics() {
     }
   };
 
-  // Build chart data from campaigns: clicks per campaign (most recent 6)
+  // Build chart data: click rate % per campaign (most recent 6, chronological)
   const chartData = [...campaigns].reverse().slice(-6).map(c => ({
     name: c.name.length > 20 ? c.name.slice(0, 20) + "…" : c.name,
-    Clicks: Number(c.total_clicks) || 0,
-    Sent: Number(c.emails_sent) || 0,
+    ClickRate: Number(c.emails_sent) > 0
+      ? Math.round((Number(c.total_clicks) / Number(c.emails_sent)) * 100)
+      : 0,
+    clicks: Number(c.total_clicks) || 0,
+    sent: Number(c.emails_sent) || 0,
   }));
 
   // Trend indicator: compare click rate of most recent vs 3rd most recent campaign
@@ -155,18 +160,45 @@ export default function Analytics() {
               data={chartData}
               margin={{ top: 20, right: 30, left: 0, bottom: 0 }}
             >
-              <CartesianGrid strokeDasharray="1 1" />
-              <XAxis dataKey="name" />
-              <YAxis />
+              <CartesianGrid strokeDasharray="3 3" stroke="#2a2a35" />
+              <XAxis dataKey="name" tick={{ fill: "#aaa", fontSize: 12 }} />
+              <YAxis tick={{ fill: "#aaa", fontSize: 12 }} unit="%" domain={[0, 100]} />
               <Tooltip
-                contentStyle={{ backgroundColor: "#1e1e26", border: "1px solid #444", borderRadius: "8px" }}
-                labelStyle={{ color: "#fff" }}
-                itemStyle={{ color: "#ddd" }}
                 cursor={{ stroke: "#555", strokeWidth: 1 }}
+                content={({ active, payload, label }) => {
+                  if (!active || !payload || !payload.length) return null;
+                  const rate = payload.find(p => p.dataKey === "ClickRate")?.value ?? 0;
+                  const clicks = payload.find(p => p.dataKey === "clicks")?.value ?? 0;
+                  const sent = payload.find(p => p.dataKey === "sent")?.value ?? 0;
+                  return (
+                    <div style={{
+                      backgroundColor: "#1e1e26",
+                      border: "1px solid #444",
+                      borderRadius: "8px",
+                      padding: "10px 14px",
+                      fontSize: "13px"
+                    }}>
+                      <p style={{ color: "#aaa", margin: "0 0 6px 0" }}>{label}</p>
+                      <p style={{ color: "#ddd", margin: 0 }}>
+                        {rate}%
+                        <span style={{ color: "#888", marginLeft: "8px" }}>
+                          ({clicks} clicked / {sent} sent)
+                        </span>
+                      </p>
+                    </div>
+                  );
+                }}
               />
-              <Legend />
-              <Line type="monotone" dataKey="Sent" stroke="#4caf50" />
-              <Line type="monotone" dataKey="Clicks" stroke="#00e5ff" />
+              <Line
+                type="monotone"
+                dataKey="ClickRate"
+                stroke="#00e5ff"
+                strokeWidth={2}
+                dot={{ r: 4, fill: "#00e5ff" }}
+                activeDot={{ r: 6 }}
+              />
+              <Line dataKey="clicks" stroke="transparent" strokeWidth={0} dot={false} activeDot={false} legendType="none" />
+              <Line dataKey="sent" stroke="transparent" strokeWidth={0} dot={false} activeDot={false} legendType="none" />
             </LineChart>
           </ResponsiveContainer>
         </div>

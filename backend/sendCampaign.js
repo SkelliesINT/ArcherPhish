@@ -61,7 +61,7 @@ module.exports = function registerSendCampaignRoute(app, db, prisma) {
 
   app.post('/api/send-campaign', async (req, res) => {
     try {
-      const { simulatedEmail, testOnly, departments } = req.body || {};
+      const { simulatedEmail, testOnly, departments, redirectTo } = req.body || {};
 
       if (!simulatedEmail || typeof simulatedEmail !== 'string') {
         return res.status(400).json({ error: 'simulatedEmail (string) is required' });
@@ -88,8 +88,8 @@ module.exports = function registerSendCampaignRoute(app, db, prisma) {
 
       // Create campaign record in DB
       const [campaignResult] = await db.query(
-        'INSERT INTO campaigns (name, difficulty) VALUES (?, ?)',
-        [subject || 'Untitled Campaign', 'medium']
+        'INSERT INTO campaigns (name, difficulty, redirect_to) VALUES (?, ?, ?)',
+        [subject || 'Untitled Campaign', 'medium', redirectTo === 'training' ? 'training' : 'google']
       );
       const campaignId = campaignResult.insertId;
 
@@ -115,19 +115,28 @@ module.exports = function registerSendCampaignRoute(app, db, prisma) {
         const { id, email, firstName, lastName } = recipient;
         const name = firstName || lastName || "Employee";
         const trackingId = recipientTrackingMap[id];
+        const baseUrl = process.env.BASE_URL || 'http://localhost:4000';
         const trackingUrl = trackingId
-          ? `${process.env.BASE_URL || 'http://localhost:4000'}/r/${trackingId}`
+          ? `${baseUrl}/r/${trackingId}${baseUrl.includes('ngrok') ? '?ngrok-skip-browser-warning=skip' : ''}`
           : null;
         const personalizedBody = rawBody
           .replace(/{{\s*employee\s*}}/gi, name)
           .replace(/\[SIMULATED LINK\]/g, trackingUrl || '[LINK]');
+
+        const htmlContent = personalizedBody
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/\n/g, '<br/>')
+          .replace(/(https?:\/\/[^\s&<]+)/g, '<a href="$1" style="color:#1a73e8;text-decoration:underline;">$1</a>');
+        const htmlBody = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#000;">${htmlContent}</body></html>`;
 
         const mailOptions = {
           from,
           to: email,
           subject,
           text: personalizedBody,
-          html: personalizedBody.replace(/\n/g, '<br/>')
+          html: htmlBody
         };
         return transporter.sendMail(mailOptions);
       };

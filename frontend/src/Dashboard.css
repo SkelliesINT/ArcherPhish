@@ -567,6 +567,16 @@
 }
 
 /* ---------------------------
+   Dashboard Top Row (Overview + Trend)
+--------------------------- */
+.dashboard-top-row {
+  display: flex;
+  gap: 20px;
+  align-items: stretch;
+  margin-bottom: 24px;
+}
+
+/* ---------------------------
    Campaign Overview Widget
 --------------------------- */
 .campaign-overview-widget {
@@ -574,8 +584,54 @@
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 12px;
   padding: 24px 28px;
-  margin-bottom: 24px;
-  max-width: 500px;
+  flex: 0 0 auto;
+}
+
+/* ---------------------------
+   Click Rate Trend Widget
+--------------------------- */
+.trend-widget {
+  flex: 1;
+  min-width: 0;
+  background-color: #151519;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.trend-widget-indicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.trend-widget-arrow {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.trend-widget-label {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.trend-widget-diff {
+  font-size: 0.78rem;
+  color: #666;
+}
+
+.trend-widget-empty {
+  font-size: 0.85rem;
+  color: #666;
+  margin: 0;
+}
+
+.trend-widget-chart {
+  flex: 1;
 }
 
 .cow-header {

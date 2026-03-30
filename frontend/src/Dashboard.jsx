@@ -2,6 +2,9 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+} from "recharts";
 import "./Dashboard.css";
 import "./index.css";
 import Sidebar from "./Sidebar";
@@ -12,6 +15,7 @@ export default function Dashboard() {
   const [topNews, setTopNews] = useState([]);
   const [loadingNews, setLoadingNews] = useState(true);
   const [daysSinceLastCampaign, setDaysSinceLastCampaign] = useState(null);
+  const [campaigns, setCampaigns] = useState([]);
   const [stats, setStats] = useState(null);
   const [recentCampaign, setRecentCampaign] = useState(null);
   const [totalRecipients, setTotalRecipients] = useState(null);
@@ -50,6 +54,7 @@ export default function Dashboard() {
     axios.get("http://localhost:4000/api/campaigns")
       .then(res => {
         const data = res.data || [];
+        setCampaigns(data);
 
         if (data.length > 0) {
           const lastDate = new Date(data[0].created_at);
@@ -107,6 +112,28 @@ export default function Dashboard() {
     ? Math.round((Number(recentCampaign.total_clicks) / Number(recentCampaign.emails_sent)) * 100)
     : 0;
 
+  // Click rate trend — chronological order, last 6 campaigns
+  const trendChartData = [...campaigns].reverse().slice(-6).map(c => ({
+    name: c.name.length > 14 ? c.name.slice(0, 14) + "…" : c.name,
+    Rate: Number(c.emails_sent) > 0
+      ? Math.round((Number(c.total_clicks) / Number(c.emails_sent)) * 100)
+      : 0,
+  }));
+
+  const trendInfo = (() => {
+    if (campaigns.length < 2) return null;
+    const recent = campaigns.slice(0, Math.min(3, campaigns.length));
+    const rateOf = c => Number(c.emails_sent) > 0
+      ? (Number(c.total_clicks) / Number(c.emails_sent)) * 100
+      : 0;
+    const newestRate = rateOf(recent[0]);
+    const oldestRate = rateOf(recent[recent.length - 1]);
+    const diff = newestRate - oldestRate;
+    if (Math.abs(diff) < 1) return { label: "Stable", arrow: "→", color: "#aaa", diff: 0 };
+    if (diff < 0) return { label: "Improving", arrow: "↓", color: "#4caf50", diff: Math.abs(diff).toFixed(1) };
+    return { label: "Worsening", arrow: "↑", color: "#f44336", diff: diff.toFixed(1) };
+  })();
+
   return (
     <div className="dashboard-container">
       <Sidebar />
@@ -124,52 +151,104 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Campaign Overview Widget */}
+        {/* Campaign Overview + Trend Row */}
         {isLoggedIn && (
-          <div className="campaign-overview-widget">
-            <p className="cow-header">Campaign Overview</p>
-            <div className="cow-body">
-              {/* Left: days counter + launch button */}
-              <div className="cow-left">
-                <div>
-                  <p
-                    className="cow-days-number"
-                    style={{ color: getDaysColor(daysSinceLastCampaign) }}
-                  >
-                    {daysSinceLastCampaign !== null ? daysSinceLastCampaign : "—"}
-                  </p>
-                  <p className="cow-days-label">Days Since Last Campaign</p>
-                </div>
-                <button className="cow-launch-btn" onClick={() => navigate("/create-campaign")}>
-                  Launch Campaign →
-                </button>
-              </div>
+          <div className="dashboard-top-row">
 
-              {stats && (
-                <>
-                  <div className="cow-vdivider" />
-                  {/* Right: 2x2 stats grid */}
-                  <div className="cow-stats">
-                    <div className="cow-stat">
-                      <p className="cow-stat-value">{stats.totalCampaigns}</p>
-                      <p className="cow-stat-label">Campaigns</p>
-                    </div>
-                    <div className="cow-stat">
-                      <p className="cow-stat-value">{stats.totalEmailsSent}</p>
-                      <p className="cow-stat-label">Emails Sent</p>
-                    </div>
-                    <div className="cow-stat">
-                      <p className="cow-stat-value">{stats.overallClickRate}%</p>
-                      <p className="cow-stat-label">Click Rate</p>
-                    </div>
-                    <div className="cow-stat">
-                      <p className="cow-stat-value">{totalRecipients ?? "—"}</p>
-                      <p className="cow-stat-label">Recipients</p>
-                    </div>
+            {/* Campaign Overview Widget */}
+            <div className="campaign-overview-widget">
+              <p className="cow-header">Campaign Overview</p>
+              <div className="cow-body">
+                <div className="cow-left">
+                  <div>
+                    <p
+                      className="cow-days-number"
+                      style={{ color: getDaysColor(daysSinceLastCampaign) }}
+                    >
+                      {daysSinceLastCampaign !== null ? daysSinceLastCampaign : "—"}
+                    </p>
+                    <p className="cow-days-label">Days Since Last Campaign</p>
                   </div>
-                </>
+                  <button className="cow-launch-btn" onClick={() => navigate("/create-campaign")}>
+                    Launch Campaign →
+                  </button>
+                </div>
+
+                {stats && (
+                  <>
+                    <div className="cow-vdivider" />
+                    <div className="cow-stats">
+                      <div className="cow-stat">
+                        <p className="cow-stat-value">{stats.totalCampaigns}</p>
+                        <p className="cow-stat-label">Campaigns</p>
+                      </div>
+                      <div className="cow-stat">
+                        <p className="cow-stat-value">{stats.totalEmailsSent}</p>
+                        <p className="cow-stat-label">Emails Sent</p>
+                      </div>
+                      <div className="cow-stat">
+                        <p className="cow-stat-value">{stats.overallClickRate}%</p>
+                        <p className="cow-stat-label">Click Rate</p>
+                      </div>
+                      <div className="cow-stat">
+                        <p className="cow-stat-value">{totalRecipients ?? "—"}</p>
+                        <p className="cow-stat-label">Recipients</p>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Click Rate Trend Widget */}
+            <div className="trend-widget">
+              <p className="cow-header">Click Rate Trend</p>
+              {trendInfo ? (
+                <div className="trend-widget-indicator">
+                  <span className="trend-widget-arrow" style={{ color: trendInfo.color }}>
+                    {trendInfo.arrow}
+                  </span>
+                  <span className="trend-widget-label" style={{ color: trendInfo.color }}>
+                    {trendInfo.label}
+                  </span>
+                  {trendInfo.diff > 0 && (
+                    <span className="trend-widget-diff">
+                      ({trendInfo.diff}pp over last {Math.min(3, campaigns.length)} campaigns)
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <p className="trend-widget-empty">
+                  {campaigns.length === 0 ? "No campaigns yet" : "Send more campaigns to see a trend"}
+                </p>
+              )}
+              {campaigns.length > 0 && (
+                <div className="trend-widget-chart">
+                  <ResponsiveContainer width="100%" height={150}>
+                    <LineChart data={trendChartData} margin={{ top: 4, right: 16, left: -16, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1e1e26" />
+                      <XAxis dataKey="name" tick={{ fill: "#666", fontSize: 10 }} />
+                      <YAxis tick={{ fill: "#666", fontSize: 10 }} unit="%" domain={[0, 100]} />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: "#1e1e26", border: "1px solid #444", borderRadius: "8px" }}
+                        labelStyle={{ color: "#fff" }}
+                        itemStyle={{ color: "#ddd" }}
+                        formatter={(val) => [`${val}%`, "Click Rate"]}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="Rate"
+                        stroke="#00e5ff"
+                        strokeWidth={2}
+                        dot={{ r: 3, fill: "#00e5ff" }}
+                        activeDot={{ r: 5 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
               )}
             </div>
+
           </div>
         )}
 

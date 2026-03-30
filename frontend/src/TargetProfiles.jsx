@@ -148,6 +148,33 @@ export default function TargetProfiles() {
   const [showEditNewDept, setShowEditNewDept] = useState(false);
   const [editNewDeptInput, setEditNewDeptInput] = useState("");
 
+  // Company name setting
+  const [companyName, setCompanyName] = useState("");
+  const [companyInput, setCompanyInput] = useState("");
+  const [companySaving, setCompanySaving] = useState(false);
+
+  const fetchCompanyName = async () => {
+    try {
+      const res = await axios.get("http://localhost:4000/api/settings");
+      setCompanyName(res.data.companyName || "");
+      setCompanyInput(res.data.companyName || "");
+    } catch (err) {
+      console.error("Failed to load company name:", err);
+    }
+  };
+
+  const handleSaveCompany = async () => {
+    setCompanySaving(true);
+    try {
+      await axios.put("http://localhost:4000/api/settings", { companyName: companyInput.trim() });
+      setCompanyName(companyInput.trim());
+    } catch (err) {
+      console.error("Failed to save company name:", err);
+    } finally {
+      setCompanySaving(false);
+    }
+  };
+
   // Fetch departments
   const fetchDepartments = async () => {
     try {
@@ -174,6 +201,7 @@ export default function TargetProfiles() {
   useEffect(() => {
     fetchRecipients();
     fetchDepartments();
+    fetchCompanyName();
   }, []);
 
   // Add a new department to the managed list
@@ -322,8 +350,29 @@ export default function TargetProfiles() {
   return (
     <div className="dashboard-container">
       <Sidebar />
-      <div className="dashboard-main">
+      <div className="dashboard-main dashboard-main--fill">
         <h1>Target Profiles</h1>
+
+        <div className="tp-company-bar">
+          <label className="tp-company-label">Organization Name</label>
+          <input
+            className="tp-company-input"
+            placeholder="e.g. Acme Corp"
+            value={companyInput}
+            onChange={e => setCompanyInput(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleSaveCompany()}
+          />
+          <button
+            className="tp-company-save-btn"
+            onClick={handleSaveCompany}
+            disabled={companySaving || companyInput.trim() === companyName}
+          >
+            {companySaving ? "Saving..." : "Save"}
+          </button>
+          {companyName && companyInput.trim() === companyName && (
+            <span className="tp-company-saved">Saved</span>
+          )}
+        </div>
 
         <div className="add-recipient-container">
           <div className="add-recipient-inputs">

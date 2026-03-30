@@ -318,6 +318,28 @@
   color: #e8eef1;
 }
 
+/* ── Redirect toggle ─────────────────────────────────────────────────────── */
+.cc-redirect-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  font-size: 13px;
+  color: #aaa;
+  cursor: pointer;
+}
+
+.cc-redirect-toggle:hover {
+  color: #e8eef1;
+}
+
+.cc-redirect-hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: #555;
+  font-family: monospace;
+}
+
 /* ── Spinner ─────────────────────────────────────────────────────────────── */
 .cc-spinner {
   width: 36px;

@@ -43,9 +43,14 @@ export default function CreateCampaign() {
   const [prompt, setPrompt] = useState("");
   const [role, setRole] = useState("generic");
   const [difficulty, setDifficulty] = useState("medium");
+  const [tone, setTone] = useState("professional");
   const [generatedEmail, setGeneratedEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+
+  // ── Shared options ───────────────────────────────────────────────────────
+  const [redirectTo, setRedirectTo] = useState("google"); // "google" | "training"
+  const [companyName, setCompanyName] = useState("");
 
   // ── Department targeting state ───────────────────────────────────────────
   const [targetMode, setTargetMode] = useState("all"); // "all" | "department"
@@ -58,9 +63,18 @@ export default function CreateCampaign() {
   const [selectedIds, setSelectedIds] = useState([]);
   const [hrRole, setHrRole] = useState("spear_phish");
   const [hrDifficulty, setHrDifficulty] = useState("high");
+  const [hrTone, setHrTone] = useState("professional");
   const [hrSending, setHrSending] = useState(false);
   const [hrResult, setHrResult] = useState(null);
   const [showHrModal, setShowHrModal] = useState(false);
+
+  // Fetch company name once on mount
+  useEffect(() => {
+    fetch("http://localhost:4000/api/settings")
+      .then(r => r.json())
+      .then(data => setCompanyName(data.companyName || ""))
+      .catch(() => {});
+  }, []);
 
   // Fetch departments when on mass_generic mode
   useEffect(() => {
@@ -111,7 +125,7 @@ export default function CreateCampaign() {
       const res = await fetch("http://localhost:4000/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, role, difficulty, model: "gpt-3.5-turbo" }),
+        body: JSON.stringify({ prompt, role, difficulty, tone, companyName, model: "gpt-3.5-turbo" }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to generate email");
@@ -136,7 +150,7 @@ export default function CreateCampaign() {
       const res = await fetch("http://localhost:4000/api/send-campaign", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ simulatedEmail: generatedEmail, testOnly, departments: deptPayload }),
+        body: JSON.stringify({ simulatedEmail: generatedEmail, testOnly, departments: deptPayload, redirectTo }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to send campaign");
@@ -174,6 +188,9 @@ export default function CreateCampaign() {
           recipientIds: selectedIds,
           role: hrRole,
           difficulty: hrDifficulty,
+          tone: hrTone,
+          redirectTo,
+          companyName,
         }),
       });
       const text = await res.text();
@@ -249,6 +266,17 @@ export default function CreateCampaign() {
                 <option value="high">High</option>
               </select>
 
+              <label style={{ marginTop: 12 }}>Tone</label>
+              <select
+                value={tone}
+                onChange={(e) => setTone(e.target.value)}
+                className="ap-input"
+                style={{ width: "100%", marginTop: 8, background: "#151518ff", padding: 10 }}
+              >
+                <option value="professional">Professional</option>
+                <option value="casual">Casual / Personable</option>
+              </select>
+
               {/* Department targeting */}
               <div className="cc-target-section">
                 <label className="cc-target-label">Target Recipients</label>
@@ -320,6 +348,19 @@ export default function CreateCampaign() {
                 style={{ minHeight: "150px", marginTop: "16px", resize: "vertical" }}
               />
 
+              <label className="cc-redirect-toggle">
+                <input
+                  type="checkbox"
+                  checked={redirectTo === "training"}
+                  onChange={(e) => setRedirectTo(e.target.checked ? "training" : "google")}
+                  className="cc-hr-checkbox"
+                />
+                Redirect targets to ArcherPhish training page after click
+                <span className="cc-redirect-hint">
+                  {redirectTo === "training" ? "→ /training" : "→ google.com"}
+                </span>
+              </label>
+
               <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "16px", gap: "12px" }}>
                 <button
                   type="button"
@@ -374,6 +415,17 @@ export default function CreateCampaign() {
                 <option value="high">High</option>
               </select>
 
+              <label style={{ marginTop: 12 }}>Tone</label>
+              <select
+                value={hrTone}
+                onChange={(e) => setHrTone(e.target.value)}
+                className="ap-input"
+                style={{ width: "100%", marginTop: 8, background: "#151518ff", padding: 10 }}
+              >
+                <option value="professional">Professional</option>
+                <option value="casual">Casual / Personable</option>
+              </select>
+
               {/* Recipient selector */}
               <div className="cc-hr-section">
                 <div className="cc-hr-header">
@@ -426,6 +478,19 @@ export default function CreateCampaign() {
                   </div>
                 )}
               </div>
+
+              <label className="cc-redirect-toggle">
+                <input
+                  type="checkbox"
+                  checked={redirectTo === "training"}
+                  onChange={(e) => setRedirectTo(e.target.checked ? "training" : "google")}
+                  className="cc-hr-checkbox"
+                />
+                Redirect targets to ArcherPhish training page after click
+                <span className="cc-redirect-hint">
+                  {redirectTo === "training" ? "→ /training" : "→ google.com"}
+                </span>
+              </label>
 
               <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "16px", gap: "12px" }}>
                 <button

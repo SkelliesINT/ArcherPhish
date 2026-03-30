@@ -554,6 +554,7 @@ app.post("/api/links", async (req, res) => {
 // Unified redirect: check flat-file first, then DB campaign links
 app.get("/r/:linkId", async (req, res) => {
   const { linkId } = req.params;
+  console.log(`[/r/:linkId] received linkId="${linkId}"`);
 
   // --- Flat-file first ---
   const links = loadLinks();
@@ -567,27 +568,32 @@ app.get("/r/:linkId", async (req, res) => {
     return res.redirect(302, link.url);
   }
 
-  // --- Fall back to DB using Prisma ---
+  // --- Fall back to DB ---
   try {
-    const phishingLink = await prisma.phishing_links.findUnique({
-      where: { tracking_id: linkId },
-      select: { id: true },
-    });
+    const [[phishingLink]] = await db.query(`
+      SELECT pl.id, COALESCE(c.redirect_to, 'google') AS redirect_to
+      FROM phishing_links pl
+      JOIN campaigns c ON c.id = pl.campaign_id
+      WHERE pl.tracking_id = ?
+    `, [linkId]);
 
     if (!phishingLink) return res.status(404).send("Link not found");
 
     // Record the click event
-    await prisma.link_events.create({
-      data: {
-        phishing_link_id: phishingLink.id,
-        ip_address: req.headers["x-forwarded-for"] || req.socket.remoteAddress || "",
-        user_agent: req.headers["user-agent"] || "",
-        created_at: new Date(),
-      },
-    });
+    await db.query(
+      "INSERT INTO link_events (phishing_link_id, ip_address, user_agent) VALUES (?, ?, ?)",
+      [
+        phishingLink.id,
+        req.headers["x-forwarded-for"] || req.socket.remoteAddress || "",
+        req.headers["user-agent"] || "",
+      ]
+    );
 
-    // Redirect to your default target (update as needed)
-    res.redirect(302, "https://example.com");
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+    const redirectUrl = phishingLink.redirect_to === "training"
+      ? `${frontendUrl}/training`
+      : "https://www.google.com";
+    res.redirect(302, redirectUrl);
   } catch (err) {
     console.error("Redirect error:", err);
     res.status(500).send("Server error");
@@ -793,6 +799,34 @@ registerAIGenerateRoute(app);
 registerSendCampaignRoute(app, db, prisma);
 registerSendHighRiskCampaignRoute(app, db);
 
+// =====================================================
+// SETTINGS
+// =====================================================
+
+app.get("/api/settings", async (_req, res) => {
+  try {
+    const [[row]] = await db.query("SELECT company_name FROM settings WHERE id = 1");
+    res.json({ companyName: row ? row.company_name : "" });
+  } catch (err) {
+    console.error("GET /api/settings error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.put("/api/settings", async (req, res) => {
+  try {
+    const { companyName = "" } = req.body || {};
+    await db.query(
+      "INSERT INTO settings (id, company_name) VALUES (1, ?) ON DUPLICATE KEY UPDATE company_name = ?",
+      [companyName, companyName]
+    );
+    res.json({ companyName });
+  } catch (err) {
+    console.error("PUT /api/settings error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // Global error handler — ensures all unhandled errors return JSON, not HTML
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
@@ -827,9 +861,46 @@ app.use((err, req, res, next) => {
     if (osintColCheck[0].cnt === 0) {
       await db.query(`ALTER TABLE recipients ADD COLUMN osint_data TEXT NULL`);
     }
+    const [redirectColCheck] = await db.query(`
+      SELECT COUNT(*) AS cnt FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'campaigns'
+        AND COLUMN_NAME = 'redirect_to'
+    `);
+    if (redirectColCheck[0].cnt === 0) {
+      await db.query(`ALTER TABLE campaigns ADD COLUMN redirect_to VARCHAR(20) NOT NULL DEFAULT 'google'`);
+    }
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS settings (
+        id INT NOT NULL DEFAULT 1,
+        company_name VARCHAR(200) NOT NULL DEFAULT '',
+        PRIMARY KEY (id)
+      )
+    `);
+    await db.query(`INSERT IGNORE INTO settings (id, company_name) VALUES (1, '')`);
     console.log("✅ DB migrations complete");
   } catch (err) {
     console.error("DB migration error:", err);
   }
-  app.listen(PORT, () => console.log(`🚀 Backend running on http://localhost:${PORT}`));
+  app.listen(PORT, async () => {
+    console.log(`🚀 Backend running on http://localhost:${PORT}`);
+
+    // Auto-start ngrok if NGROK_AUTHTOKEN is set and BASE_URL is not already a public URL
+    console.log(`[ngrok] NGROK_AUTHTOKEN set: ${!!process.env.NGROK_AUTHTOKEN}, BASE_URL: "${process.env.BASE_URL}"`);
+    if (process.env.NGROK_AUTHTOKEN && (!process.env.BASE_URL || process.env.BASE_URL.includes('localhost'))) {
+      console.log('[ngrok] Starting tunnel...');
+      try {
+        const ngrok = require('@ngrok/ngrok');
+        const listener = await ngrok.forward({ addr: PORT, authtoken: process.env.NGROK_AUTHTOKEN });
+        process.env.BASE_URL = listener.url();
+        console.log(`🌐 Ngrok tunnel active: ${process.env.BASE_URL}`);
+        console.log(`🔗 Tracking links will use: ${process.env.BASE_URL}/r/<trackingId>`);
+      } catch (err) {
+        console.error('❌ Ngrok failed to start:', err.message);
+        console.warn('   Tracking links will fall back to BASE_URL in .env or http://localhost:4000');
+      }
+    } else {
+      console.log('[ngrok] Skipped — token missing or BASE_URL already set to a public URL');
+    }
+  });
 })();

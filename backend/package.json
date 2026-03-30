@@ -11,6 +11,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@ngrok/ngrok": "^1.7.0",
     "@prisma/client": "^5.22.0",
     "axios": "^1.13.4",
     "bcrypt": "^6.0.0",

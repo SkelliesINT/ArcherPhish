@@ -11,7 +11,7 @@ module.exports = function registerAIGenerateRoute(app) {
         return res.status(500).send('Server configuration error');
       }
 
-      const { prompt = '', role = 'generic', difficulty = 'low' } = req.body || {};
+      const { prompt = '', role = 'generic', difficulty = 'low', tone = 'professional', companyName = '' } = req.body || {};
 
       if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
         return res.status(400).json({ error: 'Prompt is required' });
@@ -38,13 +38,19 @@ module.exports = function registerAIGenerateRoute(app) {
         difficultyInstruction = `Difficulty instruction: ${diff.toUpperCase()} — use moderate sophistication.`;
       }
 
+      const toneInstruction = String(tone || 'professional').toLowerCase() === 'casual'
+        ? 'Tone: CASUAL — write in a friendly, conversational, personable voice. Sound like a colleague or peer, not a formal business communication. Use contractions and natural language.'
+        : 'Tone: PROFESSIONAL — formal, polished, corporate language appropriate for a business setting.';
+
       // Build the user message including difficultyInstruction
       const userMessage = [
         `Scenario prompt: ${prompt.trim()}`,
         `Role: ${role}`,
+        companyName ? `Company/Organization Name: ${companyName} — use this exact name in the email instead of a placeholder.` : null,
         difficultyInstruction,
+        toneInstruction,
         'Instruction: Return only the simulated email (Subject, From, Body). This is for internal training. Do NOT include red flags, quizzes, or external analysis.'
-      ].join('\n\n');
+      ].filter(Boolean).join('\n\n');
 
       const modelToUse = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
 
