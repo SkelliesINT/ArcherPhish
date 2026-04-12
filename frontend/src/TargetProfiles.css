@@ -2,6 +2,74 @@
   padding: 20px;
 }
 
+/* Lock the Target Profiles page to viewport height so the table fills remaining space */
+.dashboard-main--fill {
+  overflow: hidden;
+}
+
+/* ── Organization name bar ───────────────────────────────────────────────── */
+.tp-company-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  background: #151519;
+  border: 1px solid #2a2a36;
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.tp-company-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #aaa;
+  white-space: nowrap;
+}
+
+.tp-company-input {
+  flex: 1;
+  background: #1e1e26;
+  border: 1px solid #333;
+  border-radius: 6px;
+  color: #e8eef1;
+  font-size: 13px;
+  padding: 6px 10px;
+  outline: none;
+  max-width: 280px;
+}
+
+.tp-company-input:focus {
+  border-color: #00e5ff;
+}
+
+.tp-company-save-btn {
+  background: rgba(0, 229, 255, 0.12);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  color: #00e5ff;
+  border-radius: 6px;
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.tp-company-save-btn:hover:not(:disabled) {
+  background: rgba(0, 229, 255, 0.22);
+}
+
+.tp-company-save-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tp-company-saved {
+  font-size: 12px;
+  color: #4caf50;
+}
+
 /* Add Recipient */
 .add-recipient-container {
   margin-bottom: 20px;
@@ -34,6 +102,17 @@
   background-color: #0056b3;
 }
 
+.high-risk-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #f44336;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 .success {
   color: green;
   margin-top: 5px;
@@ -47,6 +126,10 @@
 /* Search */
 .search-container {
   margin-bottom: 10px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .search-container input {
@@ -56,12 +139,28 @@
   border-radius: 4px;
   border: 1px solid #ccc;
   color: white;
-  background-color: #151519
+  background-color: #151519;
+}
+
+.dept-filter-select {
+  padding: 8px 10px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  color: white;
+  background-color: #151519;
+  cursor: pointer;
+  min-width: 160px;
+}
+
+.dept-filter-select option {
+  background-color: #1e1e26;
+  color: white;
 }
 
 /* Table */
 .recipient-table-container {
-  max-height: calc(40px * 7); /* 10 rows */
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   border: 1px solid #ccc;
   border-radius: 8px;
@@ -93,7 +192,76 @@
 }
 
 .recipient-table tr:hover td {
-  background-color: var(--row-hover);
+  background-color: #252530 !important;
+  color: #ffffff !important;
+}
+
+/* High-risk badge */
+.high-risk-badge {
+  display: inline-block;
+  background-color: rgba(244, 67, 54, 0.15);
+  color: #f44336;
+  border: 1px solid #f44336;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 1px 5px;
+  margin-left: 7px;
+  vertical-align: middle;
+  text-transform: uppercase;
+}
+
+.high-risk-row td {
+  background-color: #1a0e0e !important;
+}
+
+/* High-risk toggle button */
+.risk-btn {
+  padding: 4px 8px;
+  border: 1px solid;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.risk-btn-on {
+  background-color: rgba(244, 67, 54, 0.15);
+  border-color: #f44336;
+  color: #f44336;
+}
+
+.risk-btn-on:hover {
+  background-color: rgba(244, 67, 54, 0.3);
+}
+
+.risk-btn-off {
+  background-color: #1e1e26;
+  border-color: #444;
+  color: #888;
+}
+
+.risk-btn-off:hover {
+  border-color: #f44336;
+  color: #f44336;
+}
+
+/* Sortable column headers */
+.sortable-th {
+  cursor: pointer;
+  user-select: none;
+}
+
+.sortable-th:hover {
+  background-color: #1e1e26 !important;
+}
+
+.sort-indicator {
+  font-size: 10px;
+  color: #666;
+  margin-left: 2px;
 }
 
 /* Delete Button */
@@ -108,4 +276,321 @@
 
 .delete-btn:hover {
   background-color: #a71d2a;
+}
+
+/* CSV Import/Export */
+.csv-container {
+  margin: 20px 0;
+  background-color: #151519;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.csv-section {
+  padding: 18px 20px;
+}
+
+.csv-divider {
+  height: 1px;
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+.csv-title {
+  margin: 0 0 6px 0;
+  color: #e8eef1;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.csv-description {
+  margin: 0 0 12px 0;
+  color: #aaa;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.csv-upload {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.csv-upload input[type="file"] {
+  color: #ccc;
+  background-color: #101014;
+  padding: 7px 10px;
+  border-radius: 4px;
+  border: 1px solid #444;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.csv-upload input[type="file"]:hover {
+  border-color: #666;
+}
+
+.csv-upload input[type="file"]::file-selector-button {
+  background-color: #00e5ff;
+  color: #000;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 12px;
+  margin-right: 6px;
+}
+
+.csv-upload input[type="file"]::file-selector-button:hover {
+  background-color: #0bcdd4;
+}
+
+.upload-btn,
+.export-btn {
+  padding: 8px 14px;
+  border: none;
+  background-color: #00e5ff;
+  color: #000;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 13px;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.upload-btn:hover,
+.export-btn:hover {
+  background-color: #0bcdd4;
+  transform: translateY(-1px);
+}
+
+.upload-btn:disabled {
+  background-color: #555;
+  color: #999;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Department select */
+.dept-select {
+  background-color: #151519;
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  color: white;
+  cursor: pointer;
+}
+
+.dept-select option {
+  background-color: #1e1e26;
+  color: white;
+}
+
+/* Inline new department input */
+.new-dept-inline {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.new-dept-inline input {
+  background-color: #151519;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid #00e5ff;
+  color: white;
+  font-size: 13px;
+  width: 160px;
+}
+
+.dept-confirm-btn,
+.dept-cancel-btn {
+  padding: 5px 8px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dept-confirm-btn {
+  background-color: #4caf50;
+  color: white;
+}
+
+.dept-confirm-btn:hover {
+  background-color: #388e3c;
+}
+
+.dept-cancel-btn {
+  background-color: #444;
+  color: #ccc;
+}
+
+.dept-cancel-btn:hover {
+  background-color: #555;
+}
+
+/* Edit row */
+.editing-row td {
+  background-color: #1a1a2e !important;
+}
+
+.edit-input {
+  background-color: #101014;
+  border: 1px solid #444;
+  border-radius: 4px;
+  color: white;
+  padding: 5px 7px;
+  font-size: 13px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.edit-input:focus {
+  border-color: #00e5ff;
+  outline: none;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* Edit / Save / Cancel buttons */
+.edit-btn {
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  background-color: #2a5298;
+  color: white;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.edit-btn:hover {
+  background-color: #3a6bc8;
+}
+
+.save-btn {
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  background-color: #4caf50;
+  color: white;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.save-btn:hover {
+  background-color: #388e3c;
+}
+
+.cancel-btn {
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  background-color: #444;
+  color: #ccc;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.cancel-btn:hover {
+  background-color: #555;
+}
+
+/* ---------------------------
+   OSINT Panel
+--------------------------- */
+.osint-panel {
+  margin-top: 12px;
+  background-color: #0e0e14;
+  border: 1px solid rgba(244, 67, 54, 0.25);
+  border-radius: 8px;
+  padding: 16px 18px;
+}
+
+.osint-panel-title {
+  margin: 0 0 14px 0;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #f44336;
+}
+
+.osint-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.osint-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.osint-field-full {
+  grid-column: 1 / -1;
+}
+
+.osint-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.osint-input {
+  background-color: #151519;
+  border: 1px solid #333;
+  border-radius: 4px;
+  color: #e8eef1;
+  padding: 6px 9px;
+  font-size: 13px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.osint-input:focus {
+  border-color: #f44336;
+  outline: none;
+}
+
+.osint-textarea {
+  background-color: #151519;
+  border: 1px solid #333;
+  border-radius: 4px;
+  color: #e8eef1;
+  padding: 6px 9px;
+  font-size: 13px;
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 64px;
+  font-family: inherit;
+}
+
+.osint-textarea:focus {
+  border-color: #f44336;
+  outline: none;
+}
+
+/* OSINT expansion row in the table */
+.osint-edit-row td {
+  background-color: #0c0c12 !important;
+  padding: 0 16px 16px 16px;
+  cursor: default;
+}
+
+.osint-edit-row:hover td {
+  background-color: #0c0c12 !important;
 }

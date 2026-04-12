@@ -1,406 +1,324 @@
 // frontend/src/Dashboard.jsx
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import { FaCrosshairs, FaChartLine, FaSignOutAlt, FaNewspaper } from "react-icons/fa"; // Icons
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+} from "recharts";
 import "./Dashboard.css";
 import "./index.css";
 import Sidebar from "./Sidebar";
 
 export default function Dashboard() {
   const [message, setMessage] = useState("Welcome back!");
-  const [newEmail, setNewEmail] = useState("");
-  const [emailMessage, setEmailMessage] = useState("");
-  const [emailError, setEmailError] = useState("");
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [topNews, setTopNews] = useState([]);
+  const [loadingNews, setLoadingNews] = useState(true);
+  const [daysSinceLastCampaign, setDaysSinceLastCampaign] = useState(null);
+  const [campaigns, setCampaigns] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [recentCampaign, setRecentCampaign] = useState(null);
+  const [totalRecipients, setTotalRecipients] = useState(null);
   const navigate = useNavigate();
 
-  // 🔹 Analytics state
-  const [links, setLinks] = useState([]);
-  const [selectedLinkId, setSelectedLinkId] = useState(null);
-  const [analytics, setAnalytics] = useState(null);
-  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
-  const [analyticsError, setAnalyticsError] = useState("");
+  const getDaysColor = (days) => {
+    if (days === null) return "#aaa";
+    if (days <= 30) return "#4caf50";
+    if (days <= 160) return "#ffeb3b";
+    return "#f44336";
+  };
 
-  // 🔹 Create-link modal state
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [newLinkUrl, setNewLinkUrl] = useState("");
-  const [newLinkName, setNewLinkName] = useState("");
-  const [createLinkError, setCreateLinkError] = useState("");
-  const [createLinkLoading, setCreateLinkLoading] = useState(false);
-
-  // Existing auth / welcome message
+  // Auth / welcome message
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) {
-      navigate("/");
+      setIsLoggedIn(false);
+      setMessage("Welcome! Please log in to access full features.");
       return;
     }
-
+    setIsLoggedIn(true);
     axios
       .get("http://localhost:4000/api/dashboard", {
         headers: { Authorization: `Bearer ${token}` },
       })
       .then((res) => setMessage(res.data.message))
-      .catch((err) => {
-        setMessage(err.response?.data?.error || "Error");
+      .catch(() => {
         localStorage.removeItem("token");
-        navigate("/");
-      });
-  }, [navigate]);
-
-  // Load links for analytics on mount
-  useEffect(() => {
-    axios
-      .get("http://localhost:4000/api/links")
-      .then((res) => {
-        const obj = res.data || {};
-        setLinks(Object.values(obj));
-      })
-      .catch((err) => {
-        console.error(err);
+        setIsLoggedIn(false);
+        setMessage("Welcome! Please log in.");
       });
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    navigate("/");
-  };
+  // Campaigns: days since last, stats, recent campaign
+  useEffect(() => {
+    axios.get("http://localhost:4000/api/campaigns")
+      .then(res => {
+        const data = res.data || [];
+        setCampaigns(data);
 
-  const handleAddEmail = () => {
-    setEmailMessage("");
-    setEmailError("");
+        if (data.length > 0) {
+          const lastDate = new Date(data[0].created_at);
+          const today = new Date();
+          const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+          const lastMidnight = new Date(lastDate.getFullYear(), lastDate.getMonth(), lastDate.getDate());
+          const days = Math.round((todayMidnight - lastMidnight) / (1000 * 60 * 60 * 24));
+          setDaysSinceLastCampaign(days);
+          setRecentCampaign(data[0]);
+        } else {
+          setDaysSinceLastCampaign(null);
+          setRecentCampaign(null);
+        }
 
-    if (!newEmail) return setEmailError("Email cannot be empty");
+        const totalEmailsSent = data.reduce((sum, c) => sum + (Number(c.emails_sent) || 0), 0);
+        const totalClicks = data.reduce((sum, c) => sum + (Number(c.total_clicks) || 0), 0);
+        const overallClickRate = totalEmailsSent > 0
+          ? Math.round((totalClicks / totalEmailsSent) * 100)
+          : 0;
 
-    axios
-      .post("http://localhost:4000/api/recipients", { email: newEmail })
-      .then((res) => {
-        setEmailMessage(res.data.message);
-        setNewEmail("");
+        setStats({
+          totalCampaigns: data.length,
+          totalEmailsSent,
+          overallClickRate,
+        });
       })
-      .catch((err) => {
-        setEmailError(err.response?.data?.error || "Failed to add email");
+      .catch(err => console.error("Failed to load campaigns:", err));
+  }, []);
+
+  // Total recipients count
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    axios.get("http://localhost:4000/api/recipients", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(res => setTotalRecipients(res.data.length))
+      .catch(() => setTotalRecipients(null));
+  }, []);
+
+  // Top phishing news
+  useEffect(() => {
+    axios.get("http://localhost:4000/api/news?q=phishing")
+      .then(res => {
+        setTopNews(res.data.filter(a => a.image).slice(0, 3));
+        setLoadingNews(false);
+      })
+      .catch(err => {
+        console.error("Failed to load top news:", err);
+        setLoadingNews(false);
       });
-  };
+  }, []);
 
-  const handleCreateCampaign = () => {
-    navigate("/create-campaign");
-  };
+  const recentClickRate = recentCampaign && Number(recentCampaign.emails_sent) > 0
+    ? Math.round((Number(recentCampaign.total_clicks) / Number(recentCampaign.emails_sent)) * 100)
+    : 0;
 
-  // Load analytics for a specific short link
-  const handleViewAnalytics = async (linkId) => {
-    setSelectedLinkId(linkId);
-    setAnalytics(null);
-    setAnalyticsError("");
-    setLoadingAnalytics(true);
+  // Click rate trend — chronological order, last 6 campaigns
+  const trendChartData = [...campaigns].reverse().slice(-6).map(c => ({
+    name: c.name.length > 14 ? c.name.slice(0, 14) + "…" : c.name,
+    Rate: Number(c.emails_sent) > 0
+      ? Math.round((Number(c.total_clicks) / Number(c.emails_sent)) * 100)
+      : 0,
+  }));
 
-    try {
-      const res = await axios.get(
-        `http://localhost:4000/api/analytics/${linkId}`
-      );
-      setAnalytics(res.data);
-    } catch (err) {
-      console.error(err);
-      setAnalyticsError(err.response?.data?.error || "Failed to load analytics");
-    } finally {
-      setLoadingAnalytics(false);
-    }
-  };
-
-  // 🔹 Create-link modal helpers
-  const openCreateModal = () => {
-    setCreateLinkError("");
-    setNewLinkUrl("");
-    setNewLinkName("");
-    setIsCreateModalOpen(true);
-  };
-
-  const closeCreateModal = () => {
-    if (createLinkLoading) return;
-    setIsCreateModalOpen(false);
-  };
-
-  const handleCreateLink = async (e) => {
-    e.preventDefault();
-    setCreateLinkError("");
-
-    if (!newLinkUrl.trim()) {
-      setCreateLinkError("Target URL is required.");
-      return;
-    }
-
-    setCreateLinkLoading(true);
-    try {
-      const res = await axios.post("http://localhost:4000/api/links", {
-        url: newLinkUrl.trim(),
-        name: newLinkName.trim() || null,
-      });
-
-      const created = res.data; // { id, shortUrl, target }
-
-      // Add new link into list so it shows in the left panel
-      setLinks((prev) => [
-        ...prev,
-        {
-          id: created.id,
-          url: created.target,
-          name: newLinkName.trim() || null,
-          createdAt: new Date().toISOString(),
-        },
-      ]);
-
-      // Auto-select and load analytics for the new link
-      handleViewAnalytics(created.id);
-
-      setIsCreateModalOpen(false);
-    } catch (err) {
-      console.error(err);
-      setCreateLinkError(
-        err.response?.data?.error || "Failed to create tracking link"
-      );
-    } finally {
-      setCreateLinkLoading(false);
-    }
-  };
-
-  const handleDeleteLink = async (linkId) => {
-  if (!window.confirm("Are you sure you want to delete this tracking link?")) return;
-
-  try {
-    await axios.delete(`http://localhost:4000/api/links/${linkId}`);
-    // Remove link from state
-    setLinks((prev) => prev.filter((link) => link.id !== linkId));
-
-    // Clear analytics if the deleted link was selected
-    if (selectedLinkId === linkId) {
-      setSelectedLinkId(null);
-      setAnalytics(null);
-    }
-  } catch (err) {
-    console.error(err);
-    alert("Failed to delete link: " + (err.response?.data?.error || err.message));
-  }
-};
+  const trendInfo = (() => {
+    if (campaigns.length < 2) return null;
+    const recent = campaigns.slice(0, Math.min(3, campaigns.length));
+    const rateOf = c => Number(c.emails_sent) > 0
+      ? (Number(c.total_clicks) / Number(c.emails_sent)) * 100
+      : 0;
+    const newestRate = rateOf(recent[0]);
+    const oldestRate = rateOf(recent[recent.length - 1]);
+    const diff = newestRate - oldestRate;
+    if (Math.abs(diff) < 1) return { label: "Stable", arrow: "→", color: "#aaa", diff: 0 };
+    if (diff < 0) return { label: "Improving", arrow: "↓", color: "#4caf50", diff: Math.abs(diff).toFixed(1) };
+    return { label: "Worsening", arrow: "↑", color: "#f44336", diff: diff.toFixed(1) };
+  })();
 
   return (
     <div className="dashboard-container">
       <Sidebar />
 
-      {/* Main content */}
       <div className="dashboard-main">
         <h1>Dashboard</h1>
         <p className="dashboard-message">{message}</p>
 
-        <div className="dashboard-actions">
-          <button className="ap-button" onClick={handleCreateCampaign}>
-            Create Campaign
-          </button>
-          <button
-            className="ap-button ap-button-secondary"
-            onClick={openCreateModal}
-          >
-            Create Tracking Link
-          </button>
-        </div>
-
-        {/* Analytics Section */}
-        <section className="analytics-section">
-          <h2 className="analytics-title">Link Analytics</h2>
-
-          <div className="analytics-layout">
-            {/* Left: list of links */}
-            <div className="analytics-list-card">
-              <h3 className="analytics-subtitle">Tracked Links</h3>
-              {links.length === 0 && (
-                <p className="analytics-muted">No tracking links created yet.</p>
-              )}
-
-              <ul className="analytics-list">
-                {links.map((link) => (
-                  <li
-                    key={link.id}
-                    className={
-                      "analytics-list-item" +
-                      (selectedLinkId === link.id ? " selected" : "")
-                    }
-                  >
-                    <div className="analytics-link-main">
-                      <span className="analytics-link-name">
-                        {link.name || link.url}
-                      </span>
-                      <span className="analytics-link-id">ID: {link.id}</span>
-                    </div>
-
-                    <div className="analytics-link-actions">
-                      <button
-                        className="analytics-button"
-                        onClick={() => handleViewAnalytics(link.id)}
-                      >
-                        View Analytics
-                      </button>
-                      <button
-                        className="analytics-button delete"
-                        onClick={() => handleDeleteLink(link.id)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Right: details for selected link */}
-            <div className="analytics-details-card">
-              <h3 className="analytics-subtitle">Details</h3>
-
-              {loadingAnalytics && (
-                <p className="analytics-muted">Loading analytics...</p>
-              )}
-
-              {analyticsError && <p className="error">{analyticsError}</p>}
-
-              {!loadingAnalytics && !analytics && !analyticsError && (
-                <p className="analytics-muted">
-                  Select a link on the left to view analytics.
-                </p>
-              )}
-
-              {analytics && !loadingAnalytics && (
-                <div className="analytics-details">
-                  <p>
-                    <span className="analytics-label">Target URL:</span>{" "}
-                    <span className="analytics-value">
-                      {analytics.link.url}
-                    </span>
-                  </p>
-                  {analytics.link.name && (
-                    <p>
-                      <span className="analytics-label">Name:</span>{" "}
-                      <span className="analytics-value">
-                        {analytics.link.name}
-                      </span>
-                    </p>
-                  )}
-                  <p>
-                    <span className="analytics-label">Short URL:</span>{" "}
-                    <span className="analytics-value">
-                      http://localhost:4000/r/{analytics.link.id}
-                    </span>
-                  </p>
-                  <p>
-                    <span className="analytics-label">Total Clicks:</span>{" "}
-                    <span className="analytics-value">
-                      {analytics.totalClicks}
-                    </span>
-                  </p>
-                  <p>
-                    <span className="analytics-label">Unique Users:</span>{" "}
-                    <span className="analytics-value">
-                      {analytics.uniqueUsers}
-                    </span>
-                  </p>
-
-                  <div className="analytics-grid">
-                    <div>
-                      <h4>Clicks Per Day</h4>
-                      {Object.keys(analytics.perDay).length === 0 ? (
-                        <p className="analytics-muted">No click data yet.</p>
-                      ) : (
-                        <ul className="analytics-mini-list">
-                          {Object.entries(analytics.perDay).map(
-                            ([day, count]) => (
-                              <li key={day}>
-                                {day}: {count}
-                              </li>
-                            )
-                          )}
-                        </ul>
-                      )}
-                    </div>
-
-                    <div>
-                      <h4>User Agents</h4>
-                      {Object.keys(analytics.uaCounts).length === 0 ? (
-                        <p className="analytics-muted">
-                          No user agent data.
-                        </p>
-                      ) : (
-                        <ul className="analytics-mini-list">
-                          {Object.entries(analytics.uaCounts).map(
-                            ([ua, count]) => (
-                              <li key={ua}>
-                                {ua}: {count}
-                              </li>
-                            )
-                          )}
-                        </ul>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </section>
-
-        {/* 🔹 Create Tracking Link Modal */}
-        {isCreateModalOpen && (
-          <div className="modal-backdrop" onClick={closeCreateModal}>
-            <div
-              className="modal-card"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h3>Create Tracking Link</h3>
-              <form className="modal-form" onSubmit={handleCreateLink}>
-                <label>
-                  Target URL
-                  <input
-                    type="url"
-                    placeholder="https://example.com"
-                    value={newLinkUrl}
-                    onChange={(e) => setNewLinkUrl(e.target.value)}
-                  />
-                </label>
-
-                <label>
-                  Link Name (optional)
-                  <input
-                    type="text"
-                    placeholder="Internal name for this link"
-                    value={newLinkName}
-                    onChange={(e) => setNewLinkName(e.target.value)}
-                  />
-                </label>
-
-                {createLinkError && (
-                  <p className="error" style={{ marginTop: "4px" }}>
-                    {createLinkError}
-                  </p>
-                )}
-
-                <div className="modal-actions">
-                  <button
-                    type="button"
-                    className="modal-button ghost"
-                    onClick={closeCreateModal}
-                    disabled={createLinkLoading}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="modal-button primary"
-                    disabled={createLinkLoading}
-                  >
-                    {createLinkLoading ? "Creating..." : "Create Link"}
-                  </button>
-                </div>
-              </form>
-            </div>
+        {!isLoggedIn && (
+          <div className="guest-info">
+            <p>
+              You are currently browsing as a guest.
+              Log in to create campaigns and view analytics.
+            </p>
           </div>
         )}
+
+        {/* Campaign Overview + Trend Row */}
+        {isLoggedIn && (
+          <div className="dashboard-top-row">
+
+            {/* Campaign Overview Widget */}
+            <div className="campaign-overview-widget">
+              <p className="cow-header">Campaign Overview</p>
+              <div className="cow-body">
+                <div className="cow-left">
+                  <div>
+                    <p
+                      className="cow-days-number"
+                      style={{ color: getDaysColor(daysSinceLastCampaign) }}
+                    >
+                      {daysSinceLastCampaign !== null ? daysSinceLastCampaign : "—"}
+                    </p>
+                    <p className="cow-days-label">Days Since Last Campaign</p>
+                  </div>
+                  <button className="cow-launch-btn" onClick={() => navigate("/create-campaign")}>
+                    Launch Campaign →
+                  </button>
+                </div>
+
+                {stats && (
+                  <>
+                    <div className="cow-vdivider" />
+                    <div className="cow-stats">
+                      <div className="cow-stat">
+                        <p className="cow-stat-value">{stats.totalCampaigns}</p>
+                        <p className="cow-stat-label">Campaigns</p>
+                      </div>
+                      <div className="cow-stat">
+                        <p className="cow-stat-value">{stats.totalEmailsSent}</p>
+                        <p className="cow-stat-label">Emails Sent</p>
+                      </div>
+                      <div className="cow-stat">
+                        <p className="cow-stat-value">{stats.overallClickRate}%</p>
+                        <p className="cow-stat-label">Click Rate</p>
+                      </div>
+                      <div className="cow-stat">
+                        <p className="cow-stat-value">{totalRecipients ?? "—"}</p>
+                        <p className="cow-stat-label">Recipients</p>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Click Rate Trend Widget */}
+            <div className="trend-widget">
+              <p className="cow-header">Click Rate Trend</p>
+              {trendInfo ? (
+                <div className="trend-widget-indicator">
+                  <span className="trend-widget-arrow" style={{ color: trendInfo.color }}>
+                    {trendInfo.arrow}
+                  </span>
+                  <span className="trend-widget-label" style={{ color: trendInfo.color }}>
+                    {trendInfo.label}
+                  </span>
+                  {trendInfo.diff > 0 && (
+                    <span className="trend-widget-diff">
+                      ({trendInfo.diff}pp over last {Math.min(3, campaigns.length)} campaigns)
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <p className="trend-widget-empty">
+                  {campaigns.length === 0 ? "No campaigns yet" : "Send more campaigns to see a trend"}
+                </p>
+              )}
+              {campaigns.length > 0 && (
+                <div className="trend-widget-chart">
+                  <ResponsiveContainer width="100%" height={150}>
+                    <LineChart data={trendChartData} margin={{ top: 4, right: 16, left: -16, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1e1e26" />
+                      <XAxis dataKey="name" tick={{ fill: "#666", fontSize: 10 }} />
+                      <YAxis tick={{ fill: "#666", fontSize: 10 }} unit="%" domain={[0, 100]} />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: "#1e1e26", border: "1px solid #444", borderRadius: "8px" }}
+                        labelStyle={{ color: "#fff" }}
+                        itemStyle={{ color: "#ddd" }}
+                        formatter={(val) => [`${val}%`, "Click Rate"]}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="Rate"
+                        stroke="#00e5ff"
+                        strokeWidth={2}
+                        dot={{ r: 3, fill: "#00e5ff" }}
+                        activeDot={{ r: 5 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </div>
+
+          </div>
+        )}
+
+        {/* Most Recent Campaign */}
+        {isLoggedIn && recentCampaign && (
+          <div className="recent-campaign-card">
+            <p className="recent-campaign-header">Most Recent Campaign</p>
+            <p className="recent-campaign-name">{recentCampaign.name}</p>
+            <div className="recent-campaign-stats">
+              <div className="recent-stat">
+                <span className="recent-stat-value">{recentCampaign.emails_sent ?? 0}</span>
+                <span className="recent-stat-label">Sent</span>
+              </div>
+              <div className="recent-stat">
+                <span className="recent-stat-value">{recentCampaign.total_clicks ?? 0}</span>
+                <span className="recent-stat-label">Clicks</span>
+              </div>
+              <div className="recent-stat">
+                <span className="recent-stat-value">{recentClickRate}%</span>
+                <span className="recent-stat-label">Click Rate</span>
+              </div>
+              <div className="recent-stat">
+                <span className="recent-stat-value">
+                  {new Date(recentCampaign.created_at).toLocaleDateString()}
+                </span>
+                <span className="recent-stat-label">Date</span>
+              </div>
+            </div>
+            <button
+              className="recent-campaign-link"
+              onClick={() => navigate("/analytics")}
+            >
+              View in Analytics →
+            </button>
+          </div>
+        )}
+
+        {/* Top Phishing News */}
+        <section className="dashboard-news-section">
+          <h2>Top Phishing News</h2>
+          {loadingNews ? (
+            <p>Loading news...</p>
+          ) : (
+            <div className="top-news-list">
+              {topNews.map((article, index) => (
+                <a
+                  key={index}
+                  href={article.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="top-news-item"
+                >
+                  {article.image && (
+                    <img
+                      src={article.image}
+                      alt={article.title}
+                      className="top-news-thumbnail"
+                    />
+                  )}
+                  <div className="top-news-text">
+                    <p className="top-news-title">{article.title}</p>
+                    <p className="top-news-source">
+                      {article.source} • {new Date(article.published).toLocaleDateString()}
+                    </p>
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );

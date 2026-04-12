@@ -1,26 +1,10 @@
 // backend/sendCampaign.js
 // Registers POST /api/send-campaign which sends the provided simulatedEmail to recipients in DB
 const nodemailer = require('nodemailer');
-const mysql = require("mysql2");
 const pLimit = require('p-limit');
-const fs = require('fs');
-const path = require('path');
-
-const DATA_DIR = path.join(__dirname, 'data');
-const LINKS_FILE = path.join(DATA_DIR, 'links.json');
-if (!fs.existsSync(LINKS_FILE)) fs.writeFileSync(LINKS_FILE, JSON.stringify({}), 'utf8');
-
-function loadLinks() { 
-  try { 
-    return JSON.parse(fs.readFileSync(LINKS_FILE, 'utf8') || '{}'); 
-  } catch (e) { 
-    console.error('Failed to load links:', e); 
-    return {}; 
-  } 
-}
 
 
-module.exports = function registerSendCampaignRoute(app, db) {
+module.exports = function registerSendCampaignRoute(app, db, prisma) {
   if (!app) throw new Error('Express app required');
   if (!db) throw new Error('Database connection required');
 
@@ -50,10 +34,9 @@ module.exports = function registerSendCampaignRoute(app, db) {
     } catch (e) {
     }
 
-    // Normalize and remove safety prefix if present
-    const safetyPrefix = 'SIMULATION - TRAINING PURPOSES ONLY - THIS IS JUST FOR EDUCATIONAL/PRACTICING PURPOSES';
+    // Normalize and remove safety prefix if present (handles any SIMULATION... variant)
     let text = (simulatedEmail || '').replace(/\r\n/g, '\n').trim();
-    if (text.startsWith(safetyPrefix)) text = text.slice(safetyPrefix.length).trim();
+    text = text.replace(/^SIMULATION[^\n]*\n*/i, '').trim();
 
     // Regex find From: and Subject:
     const fromMatch = text.match(/^\s*From:\s*(.+)$/im);
@@ -78,108 +61,113 @@ module.exports = function registerSendCampaignRoute(app, db) {
 
   app.post('/api/send-campaign', async (req, res) => {
     try {
-      const { simulatedEmail, testOnly, linkId } = req.body || {};
+      const { simulatedEmail, testOnly, departments, redirectTo } = req.body || {};
 
       if (!simulatedEmail || typeof simulatedEmail !== 'string') {
         return res.status(400).json({ error: 'simulatedEmail (string) is required' });
       }
 
       const { from, subject, body } = parseSimulatedEmail(simulatedEmail);
-      let finalBody = body;
+      // Keep rawBody with [SIMULATED LINK] intact so per-recipient tracking URLs can be substituted in sendOne
+      const rawBody = body;
 
-      let fullShortUrl = null;
+      // fetch recipient list from DB, optionally filtered by department
+      const deptFilter = Array.isArray(departments) && departments.length > 0 ? departments : null;
+      const recipientsData = await prisma.recipients.findMany({
+        where: deptFilter ? { department: { in: deptFilter } } : undefined,
+        select: { id: true, email: true, firstName: true, lastName: true }
+      });
 
-      if (finalBody.includes('[SIMULATED LINK]')) {
-        if (linkId) {
-          // Use the existing link
-          const links = loadLinks();
-          const link = links[linkId];
-          if (!link) return res.status(404).json({ error: 'Provided linkId not found' });
-          fullShortUrl = `http://localhost:4000/r/${link.id}`;
-          finalBody = finalBody.replace(/\[SIMULATED LINK\]/g, fullShortUrl);
-        } else {
-          // Fallback: create a new link
-          try {
-            const linkRes = await fetch(`http://localhost:4000/api/links`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                url: "https://example.com/training",
-                name: "campaign-link"
-              })
-            });
-            const linkData = await linkRes.json();
-            if (linkData.shortUrl) {
-              fullShortUrl = `http://localhost:4000${linkData.shortUrl}`;
-              finalBody = finalBody.replace(/\[SIMULATED LINK\]/g, fullShortUrl);
-            }
-          } catch (e) {
-            console.error("Failed generating trackable link:", e);
-          }
+      const recipients = recipientsData.filter(r => r.email);
+      if (deptFilter && recipients.length === 0) {
+        return res.json({ message: 'No recipients found in the selected department(s)' });
+      }
+      if (recipients.length === 0) return res.json({ message: 'No recipients to send to' });
+
+      const targets = testOnly ? recipients.slice(0, 1) : recipients;
+
+      // Create campaign record in DB
+      const [campaignResult] = await db.query(
+        'INSERT INTO campaigns (name, difficulty, redirect_to) VALUES (?, ?, ?)',
+        [subject || 'Untitled Campaign', 'medium', redirectTo === 'training' ? 'training' : 'google']
+      );
+      const campaignId = campaignResult.insertId;
+
+      // Generate a unique tracking ID per recipient and create phishing_links
+      const crypto = require('crypto');
+      const recipientTrackingMap = {};
+      for (const rec of targets) {
+        const trackingId = crypto.randomBytes(24).toString('hex');
+        try {
+          await db.query(
+            'INSERT INTO phishing_links (campaign_id, recipient_id, tracking_id) VALUES (?, ?, ?)',
+            [campaignId, rec.id, trackingId]
+          );
+          recipientTrackingMap[rec.id] = trackingId;
+        } catch (e) {
+          console.error(`Failed to create phishing link for recipient ${rec.id}:`, e.message);
         }
       }
 
-      // fetch recipient list from DB
-      const sql = 'SELECT email, firstName, lastName FROM recipients';
-      db.query(sql, async (err, results) => {
-        if (err) {
-          console.error('Failed to fetch recipients:', err);
-          return res.status(500).json({ error: 'Failed to fetch recipients' });
-        }
+      const limit = pLimit.default ? pLimit.default(5) : pLimit(5);
 
-        const recipients = results.map(r => ({
-          email: r.email,
-          firstName: r.firstName,
-          lastName: r.lastName
-        })).filter(r => r.email);
+      const sendOne = async (recipient) => {
+        const { id, email, firstName, lastName } = recipient;
+        const name = firstName || lastName || "Employee";
+        const trackingId = recipientTrackingMap[id];
+        const baseUrl = process.env.BASE_URL || 'http://localhost:4000';
+        const trackingUrl = trackingId
+          ? `${baseUrl}/r/${trackingId}${baseUrl.includes('ngrok') ? '?ngrok-skip-browser-warning=skip' : ''}`
+          : null;
+        const personalizedBody = rawBody
+          .replace(/{{\s*employee\s*}}/gi, name)
+          .replace(/\[SIMULATED LINK\]/g, trackingUrl || '[LINK]');
 
-        if (recipients.length === 0) return res.json({ message: 'No recipients to send to' });
+        const linkHtml = trackingUrl
+          ? `<a href="${trackingUrl}" style="color:#1a73e8;text-decoration:underline;">LINK</a>`
+          : 'LINK';
+        const htmlContent = rawBody
+          .replace(/{{\s*employee\s*}}/gi, name)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/\n/g, '<br/>')
+          .replace(/\[SIMULATED LINK\]/g, linkHtml);
+        const htmlBody = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#000;">${htmlContent}</body></html>`;
 
-        const targets = testOnly ? recipients.slice(0, 1) : recipients;
-
-        const limit = pLimit.default ? pLimit.default(5) : pLimit(5);
-
-        const sendOne = async (recipient) => {
-          const { email, firstName, lastName } = recipient;
-          const name = firstName || lastName || "Employee";
-
-          // Replace name placeholders, but keep the same finalBody with one link
-          let personalizedBody = finalBody.replace(/{{\s*employee\s*}}/gi, name);
-
-          const mailOptions = {
-            from,
-            to: email,
-            subject,
-            text: personalizedBody,
-            html: personalizedBody.replace(/\n/g, '<br/>')
-          };
-
-          return transporter.sendMail(mailOptions);
+        const mailOptions = {
+          from,
+          to: email,
+          subject,
+          text: personalizedBody,
+          html: htmlBody
         };
+        return transporter.sendMail(mailOptions);
+      };
 
-        const sendPromises = targets.map(rec =>
-          limit(() =>
-            sendOne(rec)
-              .then(info => ({ email: rec.email, success: true, info }))
-              .catch(error => ({ email: rec.email, success: false, error: error?.message || String(error) }))
-          )
-        );
+      const sendPromises = targets.map(rec =>
+        limit(() =>
+          sendOne(rec)
+            .then(info => ({ email: rec.email, success: true, info }))
+            .catch(error => ({ email: rec.email, success: false, error: error?.message || String(error) }))
+        )
+      );
 
-        const resultsSend = await Promise.all(sendPromises);
-        const successCount = resultsSend.filter(r => r.success).length;
-        const failed = resultsSend.filter(r => !r.success);
+      const resultsSend = await Promise.all(sendPromises);
+      const successCount = resultsSend.filter(r => r.success).length;
+      const failed = resultsSend.filter(r => !r.success);
 
-        console.log(`Campaign send complete: ${successCount}/${targets.length} succeeded`);
+      console.log(`Campaign send complete: ${successCount}/${targets.length} succeeded. Campaign ID: ${campaignId}`);
 
-        return res.json({
-          message: `Campaign send complete: ${successCount}/${targets.length} succeeded`,
-          details: {
-            total: targets.length,
-            success: successCount,
-            failed: failed.length,
-            failedList: failed.map(f => ({ email: f.email, error: f.error }))
-          }
-        });
+      return res.json({
+        message: `Campaign send complete: ${successCount}/${targets.length} succeeded`,
+        campaignId,
+        details: {
+          total: targets.length,
+          success: successCount,
+          failed: failed.length,
+          failedList: failed.map(f => ({ email: f.email, error: f.error }))
+        }
       });
 
     } catch (err) {
