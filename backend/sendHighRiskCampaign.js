@@ -191,26 +191,33 @@ Important constraints:
         const nameForEmail = (tone || 'professional').toLowerCase() === 'casual'
           ? (firstName || fullName)
           : fullName;
-        const substituteTokens = (str) => str
+        const substituteNames = (str) => str
           .replace(/\{\{\s*FULL_NAME\s*\}\}/gi, nameForEmail)
-          .replace(/\{\{\s*employee\s*\}\}/gi, firstName || fullName)
+          .replace(/\{\{\s*employee\s*\}\}/gi, firstName || fullName);
+
+        const linkHtml = trackingUrl
+          ? `<a href="${trackingUrl}" style="color:#1a73e8;text-decoration:underline;">LINK</a>`
+          : 'LINK';
+
+        const personalizedSubject = substituteNames(subject)
+          .replace(/\[SIMULATED LINK\]/g, trackingUrl || '[LINK]');
+        let personalizedBody = substituteNames(body)
           .replace(/\[SIMULATED LINK\]/g, trackingUrl || '[LINK]');
 
-        const personalizedSubject = substituteTokens(subject);
-        let personalizedBody = substituteTokens(body);
-
+        const isFallback = trackingUrl && !body.includes('[SIMULATED LINK]');
         // Fallback: if AI omitted [SIMULATED LINK], append the tracking URL so it is never missing
-        if (trackingUrl && !body.includes('[SIMULATED LINK]')) {
+        if (isFallback) {
           console.warn(`[HighRisk] AI omitted [SIMULATED LINK] for ${email} — appending tracking URL as fallback`);
           personalizedBody = personalizedBody + `\n\n${trackingUrl}`;
         }
 
-        const htmlContent = personalizedBody
+        let htmlContent = substituteNames(body)
           .replace(/&/g, '&amp;')
           .replace(/</g, '&lt;')
           .replace(/>/g, '&gt;')
           .replace(/\n/g, '<br/>')
-          .replace(/(https?:\/\/[^\s&<]+)/g, '<a href="$1" style="color:#1a73e8;text-decoration:underline;">$1</a>');
+          .replace(/\[SIMULATED LINK\]/g, linkHtml);
+        if (isFallback) htmlContent += `<br/><br/>${linkHtml}`;
         const htmlBody = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#000;">${htmlContent}</body></html>`;
 
         return transporter.sendMail({

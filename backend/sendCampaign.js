@@ -123,12 +123,16 @@ module.exports = function registerSendCampaignRoute(app, db, prisma) {
           .replace(/{{\s*employee\s*}}/gi, name)
           .replace(/\[SIMULATED LINK\]/g, trackingUrl || '[LINK]');
 
-        const htmlContent = personalizedBody
+        const linkHtml = trackingUrl
+          ? `<a href="${trackingUrl}" style="color:#1a73e8;text-decoration:underline;">LINK</a>`
+          : 'LINK';
+        const htmlContent = rawBody
+          .replace(/{{\s*employee\s*}}/gi, name)
           .replace(/&/g, '&amp;')
           .replace(/</g, '&lt;')
           .replace(/>/g, '&gt;')
           .replace(/\n/g, '<br/>')
-          .replace(/(https?:\/\/[^\s&<]+)/g, '<a href="$1" style="color:#1a73e8;text-decoration:underline;">$1</a>');
+          .replace(/\[SIMULATED LINK\]/g, linkHtml);
         const htmlBody = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#000;">${htmlContent}</body></html>`;
 
         const mailOptions = {

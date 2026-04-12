@@ -11,7 +11,7 @@ const EMPTY_OSINT = { linkedin: "", social: "", location: "", manager: "", inter
 function OsintPanel({ data, onChange }) {
   return (
     <div className="osint-panel">
-      <p className="osint-panel-title">OSINT Identifiers</p>
+      <p className="osint-panel-title">Personal Identifiers</p>
       <div className="osint-grid">
         <div className="osint-field">
           <label className="osint-label">LinkedIn URL</label>
@@ -38,7 +38,7 @@ function OsintPanel({ data, onChange }) {
           <textarea className="osint-textarea" placeholder="e.g. Q3 budget review, ERP migration..." value={data.projects || ""} onChange={e => onChange("projects", e.target.value)} />
         </div>
         <div className="osint-field osint-field-full">
-          <label className="osint-label">Additional OSINT Notes</label>
+          <label className="osint-label">Additional Notes</label>
           <textarea className="osint-textarea" placeholder="Any other useful context for crafting targeted emails..." value={data.notes || ""} onChange={e => onChange("notes", e.target.value)} />
         </div>
       </div>

@@ -420,7 +420,7 @@ app.get("/api/campaigns/:id/recipients", async (req, res) => {
         r.department,
         r.job_title AS jobTitle,
         r.high_risk AS highRisk,
-        COUNT(le.id) AS click_count,
+        COUNT(DISTINCT le.id) AS click_count,
         MAX(le.created_at) AS last_clicked_at,
         (SELECT le2.user_agent FROM link_events le2
          WHERE le2.phishing_link_id = pl.id
@@ -554,7 +554,6 @@ app.post("/api/links", async (req, res) => {
 // Unified redirect: check flat-file first, then DB campaign links
 app.get("/r/:linkId", async (req, res) => {
   const { linkId } = req.params;
-  console.log(`[/r/:linkId] received linkId="${linkId}"`);
 
   // --- Flat-file first ---
   const links = loadLinks();

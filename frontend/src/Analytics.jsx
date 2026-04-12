@@ -64,7 +64,6 @@ export default function Analytics() {
     fetch("http://localhost:4000/api/campaigns")
       .then(res => res.json())
       .then(data => {
-        console.log("[Analytics] campaigns from API:", data.map(c => ({ name: c.name, emails_sent: c.emails_sent, total_clicks: c.total_clicks })));
         setCampaigns(data);
       })
       .catch(err => console.error("Failed to load campaigns:", err));
@@ -287,7 +286,7 @@ export default function Analytics() {
             <thead>
               <tr>
                 <th>Campaign</th>
-                <th>Emails Sent</th>
+                <th>Sent</th>
                 <th>Clicks</th>
                 <th>Click Rate</th>
                 <th>Date</th>
@@ -298,9 +297,9 @@ export default function Analytics() {
                 <tr><td colSpan={5} style={{ textAlign: "center", color: "#aaa" }}>No campaigns yet</td></tr>
               )}
               {campaigns.map(campaign => {
-                const clickRate = Number(campaign.emails_sent) > 0
-                  ? Math.round((Number(campaign.total_clicks) / Number(campaign.emails_sent)) * 100)
-                  : 0;
+                const sent = Number(campaign.emails_sent) || 0;
+                const clicks = Number(campaign.total_clicks) || 0;
+                const clickRate = sent > 0 ? Math.round((clicks / sent) * 100) : 0;
                 return (
                 <>
                   <tr
@@ -314,8 +313,8 @@ export default function Analytics() {
                       </span>
                       {campaign.name}
                     </td>
-                    <td>{campaign.emails_sent}</td>
-                    <td>{campaign.total_clicks}</td>
+                    <td>{sent}</td>
+                    <td>{clicks}</td>
                     <td>{clickRate}%</td>
                     <td>{new Date(campaign.created_at).toLocaleDateString()}</td>
                   </tr>

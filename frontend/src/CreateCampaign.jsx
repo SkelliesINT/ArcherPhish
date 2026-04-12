@@ -388,7 +388,7 @@ export default function CreateCampaign() {
             <>
               <p className="cc-mode-desc">
                 Generates a unique AI-crafted email for each selected high-risk recipient using
-                their OSINT profile. Emails are personalized server-side — no PII is sent to the AI API.
+                their personal identifier profile. Emails are personalized server-side — no PII is sent to the AI API.
               </p>
 
               <label style={{ marginTop: 12 }}>Email Style</label>
