@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Login.css";
 import "./CreateCampaign.css";
+import { useAuth } from "./AuthContext";
 
 const ROLE_TEMPLATES = {
   generic:
@@ -35,6 +36,14 @@ const ROLE_LABELS = {
 
 export default function CreateCampaign() {
   const navigate = useNavigate();
+  const { user, permissions } = useAuth();
+  const isLoggedIn = !!user;
+  const canCreate = permissions.includes("create_campaign");
+  const canSend = permissions.includes("send_campaigns");
+  const canViewAnalytics =
+  permissions.includes("view_all_analytics") ||
+  permissions.includes("view_at_risk_analytics") ||
+  permissions.includes("view_department_analytics");
 
   // Campaign type toggle
   const [campaignType, setCampaignType] = useState("mass_generic");
@@ -68,9 +77,21 @@ export default function CreateCampaign() {
   const [hrResult, setHrResult] = useState(null);
   const [showHrModal, setShowHrModal] = useState(false);
 
+  useEffect(() => {
+  if (!isLoggedIn || !canCreate) {
+    navigate("/dashboard");
+  }
+  }, [isLoggedIn, canCreate, navigate]);
+
   // Fetch company name once on mount
   useEffect(() => {
-    fetch("http://localhost:4000/api/settings")
+    const token = localStorage.getItem("token");
+
+    fetch("http://localhost:4000/api/settings", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
       .then(r => r.json())
       .then(data => setCompanyName(data.companyName || ""))
       .catch(() => {});
@@ -79,7 +100,14 @@ export default function CreateCampaign() {
   // Fetch departments when on mass_generic mode
   useEffect(() => {
     if (campaignType !== "mass_generic") return;
-    fetch("http://localhost:4000/api/departments")
+
+    const token = localStorage.getItem("token");
+
+    fetch("http://localhost:4000/api/departments", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
       .then(r => r.json())
       .then(data => {
         const depts = Array.isArray(data) ? data : [];
@@ -118,6 +146,7 @@ export default function CreateCampaign() {
   };
 
   const handleGenerate = async () => {
+    if (!canCreate) return alert("You do not have permission to create campaigns.");
     if (!prompt.trim()) return alert("Prompt cannot be empty");
     setLoading(true);
     setGeneratedEmail("");
@@ -140,7 +169,12 @@ export default function CreateCampaign() {
   };
 
   const handleApprove = async () => {
+    if (!canSend)
+      return alert("You do not have permission to send campaigns.");
     if (!generatedEmail) return alert("No generated email to send");
+
+    const token = localStorage.getItem("token");
+
     if (targetMode === "department" && selectedDepts.length === 0) {
       return alert("Select at least one department to send to.");
     }
@@ -172,6 +206,9 @@ export default function CreateCampaign() {
   };
 
   const handleLaunchHighRisk = async () => {
+    if (!canSend) {
+      return alert("You do not have permission to send campaigns.");
+    }
     if (selectedIds.length === 0) return alert("Select at least one high-risk recipient.");
     setHrResult(null);
     setShowHrModal(true);
@@ -220,22 +257,27 @@ export default function CreateCampaign() {
 
           {/* Campaign type toggle */}
           <div className="cc-type-toggle">
+            {canCreate && (
             <button
               className={`cc-type-btn${campaignType === "mass_generic" ? " cc-type-btn--active" : ""}`}
               onClick={() => setCampaignType("mass_generic")}
             >
               Mass Send Generic
             </button>
+            )}
+
+            {canSend && (
             <button
               className={`cc-type-btn${campaignType === "high_risk_intensive" ? " cc-type-btn--active cc-type-btn--hr" : ""}`}
               onClick={() => setCampaignType("high_risk_intensive")}
             >
               High Risk Intensive
             </button>
+            )}
           </div>
 
           {/* ── Mass Send Generic ─────────────────────────────────────── */}
-          {campaignType === "mass_generic" && (
+          {campaignType === "mass_generic" && canCreate && (
             <>
               <p className="cc-mode-desc">
                 Generates one email template and sends it to all recipients. High-risk individuals
@@ -384,7 +426,7 @@ export default function CreateCampaign() {
           )}
 
           {/* ── High Risk Intensive ───────────────────────────────────── */}
-          {campaignType === "high_risk_intensive" && (
+          {campaignType === "high_risk_intensive" && canSend && (
             <>
               <p className="cc-mode-desc">
                 Generates a unique AI-crafted email for each selected high-risk recipient using
@@ -536,16 +578,18 @@ export default function CreateCampaign() {
               <button className="ap-button" style={{ background: "#555" }} onClick={() => setShowPreviewModal(false)}>
                 Close
               </button>
+              {canSend && (
               <button className="ap-button" onClick={handleApprove}>
                 Approve Campaign
               </button>
+              )}
             </div>
           </div>
         </div>
       )}
 
       {/* ── High Risk send modal ───────────────────────────────────── */}
-      {showHrModal && (
+      {showHrModal && canSend && (
         <div className="ap-modal-overlay">
           <div className="ap-card ap-modal-card" style={{ maxWidth: "560px" }}>
             {hrSending ? (
@@ -589,9 +633,11 @@ export default function CreateCampaign() {
                   >
                     Close
                   </button>
+                {canViewAnalytics && (
                   <button className="ap-button" onClick={() => navigate("/analytics")}>
                     View in Analytics
                   </button>
+                )}
                 </div>
               </>
             ) : null}

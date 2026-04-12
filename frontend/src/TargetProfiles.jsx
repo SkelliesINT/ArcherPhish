@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "./AuthContext";
 import axios from "axios";
 import Sidebar from "./Sidebar";
 import "./Dashboard.css";
@@ -99,13 +100,17 @@ function DeptSelect({ value, onChange, showNew, setShowNew, newInput, setNewInpu
 export default function TargetProfiles() {
   const token = localStorage.getItem("token");
   const navigate = useNavigate();
+  const { user, permissions } = useAuth();
+  const isLoggedIn = !!user;
+  const canView = permissions.includes("view_recipients");
+  const canManage = permissions.includes("manage_recipients");
+  const canManageSettings = permissions.includes("modify_system_settings");
 
   useEffect(() => {
-    const user = JSON.parse(localStorage.getItem("user"));
-    if (!user || user.role !== "admin") {
+    if (!isLoggedIn || !canView) {
       navigate("/dashboard");
     }
-  }, [navigate]);
+  }, [isLoggedIn, canView, navigate]);
 
   const [recipients, setRecipients] = useState([]);
   const [newFirstName, setNewFirstName] = useState("");
@@ -155,7 +160,13 @@ export default function TargetProfiles() {
 
   const fetchCompanyName = async () => {
     try {
-      const res = await axios.get("http://localhost:4000/api/settings");
+      const token = localStorage.getItem("token");
+
+      const res = await axios.get("http://localhost:4000/api/settings", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
       setCompanyName(res.data.companyName || "");
       setCompanyInput(res.data.companyName || "");
     } catch (err) {
@@ -164,9 +175,20 @@ export default function TargetProfiles() {
   };
 
   const handleSaveCompany = async () => {
+    if (!canManageSettings) return;
+
     setCompanySaving(true);
     try {
-      await axios.put("http://localhost:4000/api/settings", { companyName: companyInput.trim() });
+      const token = localStorage.getItem("token");
+
+      await axios.put(
+        "http://localhost:4000/api/settings",
+        { companyName: companyInput.trim() },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
       setCompanyName(companyInput.trim());
     } catch (err) {
       console.error("Failed to save company name:", err);
@@ -178,7 +200,13 @@ export default function TargetProfiles() {
   // Fetch departments
   const fetchDepartments = async () => {
     try {
-      const res = await axios.get("http://localhost:4000/api/departments");
+      const token = localStorage.getItem("token");
+
+      const res = await axios.get("http://localhost:4000/api/departments", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+    });
       setDepartments(res.data);
     } catch (err) {
       console.error("Failed to load departments:", err);
@@ -188,6 +216,7 @@ export default function TargetProfiles() {
   // Fetch recipients
   const fetchRecipients = async () => {
     try {
+      const token = localStorage.getItem("token");
       const res = await axios.get("http://localhost:4000/api/recipients", {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -199,17 +228,27 @@ export default function TargetProfiles() {
   };
 
   useEffect(() => {
-    fetchRecipients();
-    fetchDepartments();
-    fetchCompanyName();
-  }, []);
+    if (canView) fetchRecipients();
+    if (canView) fetchDepartments();
+    if (canManageSettings) fetchCompanyName();
+  }, [canView, canManageSettings]);
 
   // Add a new department to the managed list
   const handleAddDepartment = async (name, onSuccess) => {
+    if (!canManage) return;
+
     const trimmed = name.trim();
     if (!trimmed) return;
+
     try {
-      await axios.post("http://localhost:4000/api/departments", { name: trimmed });
+      await axios.post(
+      "http://localhost:4000/api/departments",
+      { name: trimmed },
+      {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
       setDepartments((prev) => [...new Set([...prev, trimmed])].sort());
       onSuccess(trimmed);
     } catch (err) {
@@ -222,8 +261,10 @@ export default function TargetProfiles() {
     setMessage("");
     setError("");
     if (!newEmail) return setError("Email required");
+    if (!canManage) return setError("You do not have permission to add recipients");
 
     try {
+      const token = localStorage.getItem("token");
       const res = await axios.post(
         "http://localhost:4000/api/recipients",
         {
@@ -253,7 +294,10 @@ export default function TargetProfiles() {
 
   // Delete recipient
   const handleDelete = async (id) => {
+    if (!canManage) return setError("You do not have permission to delete recipients");
+
     try {
+      const token = localStorage.getItem("token");
       await axios.delete(`http://localhost:4000/api/recipients/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -265,6 +309,8 @@ export default function TargetProfiles() {
 
   // Start editing a recipient
   const handleEditStart = (r) => {
+    if (!canManage) return;
+
     setEditingId(r.id);
     setEditFields({
       firstName: r.firstName || "",
@@ -281,6 +327,8 @@ export default function TargetProfiles() {
 
   // Save edit
   const handleEditSave = async () => {
+    if (!canManage) return;
+
     try {
       const res = await axios.put(
         `http://localhost:4000/api/recipients/${editingId}`,
@@ -353,6 +401,7 @@ export default function TargetProfiles() {
       <div className="dashboard-main dashboard-main--fill">
         <h1>Target Profiles</h1>
 
+        {permissions.includes("modify_system_settings") && (
         <div className="tp-company-bar">
           <label className="tp-company-label">Organization Name</label>
           <input
@@ -373,7 +422,8 @@ export default function TargetProfiles() {
             <span className="tp-company-saved">Saved</span>
           )}
         </div>
-
+        )}
+        {canManage && (
         <div className="add-recipient-container">
           <div className="add-recipient-inputs">
             <input
@@ -402,7 +452,7 @@ export default function TargetProfiles() {
               newInput={newDeptInput}
               setNewInput={setNewDeptInput}
               departments={departments}
-              onAddDepartment={handleAddDepartment}
+              onAddDepartment={canManage ? handleAddDepartment : undefined}
             />
             <input
               type="text"
@@ -431,7 +481,9 @@ export default function TargetProfiles() {
           {message && <p className="success">{message}</p>}
           {error && <p className="error">{error}</p>}
         </div>
+        )}
 
+        {canManage && (
         <div className="csv-container">
           <div className="csv-section">
             <h3 className="csv-title">Import Recipients</h3>
@@ -447,14 +499,19 @@ export default function TargetProfiles() {
               </button>
             </div>
           </div>
+          {permissions.includes("export_reports") && ( 
+          <>
           <div className="csv-divider" />
           <div className="csv-section">
             <h3 className="csv-title">Export Campaign Results</h3>
             <p className="csv-description">Download all recipients with campaign engagement metrics as a CSV.</p>
             <button className="export-btn" onClick={handleCSVExport}>Download Results</button>
           </div>
+          </>
+          )}
         </div>
-
+        )}
+        {permissions.includes("view_recipients") && (
         <div className="search-container">
           <input
             type="text"
@@ -476,7 +533,8 @@ export default function TargetProfiles() {
             ))}
           </select>
         </div>
-
+        )}
+        {permissions.includes("view_recipients") && (
         <div className="recipient-table-container">
           <table className="recipient-table">
             <thead>
@@ -538,7 +596,7 @@ export default function TargetProfiles() {
                           newInput={editNewDeptInput}
                           setNewInput={setEditNewDeptInput}
                           departments={departments}
-                          onAddDepartment={handleAddDepartment}
+                          onAddDepartment={canManage ? handleAddDepartment : undefined}
                         />
                       </td>
                       <td>
@@ -582,10 +640,12 @@ export default function TargetProfiles() {
                     <td>{r.email}</td>
                     <td>{r.department || "—"}</td>
                     <td>{r.jobTitle || "—"}</td>
+                    {permissions.includes("manage_recipients") && (
                     <td className="edit-actions">
                       <button className="edit-btn" onClick={() => handleEditStart(r)}>Edit</button>
                       <button className="delete-btn" onClick={() => handleDelete(r.id)}>Delete</button>
                     </td>
+                    )}
                   </tr>
                 )
               )}
@@ -599,6 +659,7 @@ export default function TargetProfiles() {
             </tbody>
           </table>
         </div>
+        )}
       </div>
     </div>
   );

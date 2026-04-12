@@ -3,12 +3,14 @@ import React, { useState } from "react";
 import { useNavigate} from "react-router-dom";
 import axios from "axios";
 import "./Login.css";
+import { useAuth } from "./AuthContext";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const { setUser } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -21,6 +23,7 @@ export default function Login() {
       const { token, user } = res.data;
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(user));
+      setUser(user);
       navigate("/dashboard");
     } catch (err) {
       setError(err.response?.data?.error || "Login failed — try again");

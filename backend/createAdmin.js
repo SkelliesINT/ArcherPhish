@@ -1,7 +1,7 @@
 // Usage: node createAdmin.js <email> <password>
 // Example: node createAdmin.js admin@company.com secretpassword
 
-const bcrypt = require("bcrypt");
+/*const bcrypt = require("bcrypt");
 const { PrismaClient } = require("@prisma/client");
 
 const prisma = new PrismaClient();
@@ -33,4 +33,4 @@ async function main() {
   }
 }
 
-main();
+main();*/

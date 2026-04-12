@@ -5,6 +5,7 @@
 const nodemailer = require('nodemailer');
 const pLimit = require('p-limit');
 const crypto = require('crypto');
+const { authenticateToken, requirePermission } = require("./middleware");
 
 module.exports = function registerSendHighRiskCampaignRoute(app, db) {
   if (!app) throw new Error('Express app required');
@@ -121,7 +122,8 @@ Important constraints:
     return { from, subject, body: body || text };
   }
 
-  app.post('/api/send-campaign-highRisk', async (req, res) => {
+  app.post('/api/send-campaign-highRisk',authenticateToken,
+  requirePermission("send_campaigns"), async (req, res) => {
     try {
       const { recipientIds, role, difficulty, tone, redirectTo, companyName = '' } = req.body || {};
 

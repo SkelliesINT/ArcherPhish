@@ -16,6 +16,7 @@ import {
 import "./Dashboard.css";
 import "./index.css";
 import "./Analytics.css";
+import { useAuth } from "./AuthContext";
 
 function parseUA(ua) {
   if (!ua) return "—";
@@ -45,13 +46,14 @@ function getBarColor(rate) {
 
 export default function Analytics() {
   const navigate = useNavigate();
+  const token = localStorage.getItem("token");
+  const { permissions } = useAuth();
 
   useEffect(() => {
-    const user = JSON.parse(localStorage.getItem("user"));
-    if (!user || user.role !== "admin") {
-      navigate("/dashboard");
-    }
-  }, [navigate]);
+    if (!permissions.includes("view_all_analytics")) {
+    navigate("/dashboard");
+  }
+  }, [permissions, navigate]);
 
   const [campaigns, setCampaigns] = useState([]);
   const [expandedCampaignId, setExpandedCampaignId] = useState(null);
@@ -61,7 +63,13 @@ export default function Analytics() {
   const [deptRisk, setDeptRisk] = useState([]);
 
   const fetchCampaigns = () => {
-    fetch("http://localhost:4000/api/campaigns")
+    const token = localStorage.getItem("token");
+
+    fetch("http://localhost:4000/api/campaigns", {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    })
       .then(res => res.json())
       .then(data => {
         console.log("[Analytics] campaigns from API:", data.map(c => ({ name: c.name, emails_sent: c.emails_sent, total_clicks: c.total_clicks })));
@@ -73,14 +81,26 @@ export default function Analytics() {
   useEffect(() => { fetchCampaigns(); }, []);
 
   useEffect(() => {
-    fetch("http://localhost:4000/api/analytics/at-risk")
+    const token = localStorage.getItem("token");
+
+    fetch("http://localhost:4000/api/analytics/at-risk", {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    })
       .then(res => res.json())
       .then(data => setAtRisk(Array.isArray(data) ? data : []))
       .catch(err => console.error("Failed to load at-risk:", err));
   }, []);
 
   useEffect(() => {
-    fetch("http://localhost:4000/api/analytics/department-risk")
+    const token = localStorage.getItem("token");
+
+    fetch("http://localhost:4000/api/analytics/department-risk", {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    })
       .then(res => res.json())
       .then(data => setDeptRisk(Array.isArray(data) ? data : []))
       .catch(err => console.error("Failed to load dept risk:", err));
@@ -95,7 +115,11 @@ export default function Analytics() {
     if (recipientsCache[campaignId]) return;
     setLoadingRecipients(true);
     try {
-      const res = await fetch(`http://localhost:4000/api/campaigns/${campaignId}/recipients`);
+      const res = await fetch(`http://localhost:4000/api/campaigns/${campaignId}/recipients`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
       const data = await res.json();
       setRecipientsCache(prev => ({ ...prev, [campaignId]: data }));
     } catch (err) {
@@ -140,10 +164,13 @@ export default function Analytics() {
         <p>Review Campaigns and Phishing Awareness Progress</p>
 
         {/* Sticky charts section */}
+        {(permissions.includes("view_all_analytics") ||
+        permissions.includes("view_at_risk_analytics") ||
+        permissions.includes("view_department_analytics")) && (
         <div className="analytics-sticky-charts">
 
         {/* Trend Indicator */}
-        {trendInfo && (
+        {permissions.includes("view_all_analytics") && trendInfo && (
           <div className="trend-bar">
             <span className="trend-label">Click Rate Trend</span>
             <span className="trend-value" style={{ color: trendInfo.color }}>
@@ -154,6 +181,7 @@ export default function Analytics() {
         )}
 
         {/* Graph area */}
+        {permissions.includes("view_campaigns") && chartData.length > 0 && (
         <div className="topGraph" style={{ width: "100%", height: 300, marginTop: "20px", marginBottom: "40px" }}>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart
@@ -202,11 +230,12 @@ export default function Analytics() {
             </LineChart>
           </ResponsiveContainer>
         </div>
-
+        )}
         {/* Insights Row: At-Risk + Department Risk */}
         <div className="insights-row">
 
           {/* At-Risk Employees */}
+          {permissions.includes("view_at_risk_analytics") && (
           <div className="insight-card">
             <p className="insight-card-header">Most At-Risk Employees</p>
             {atRisk.length === 0 ? (
@@ -233,8 +262,9 @@ export default function Analytics() {
               </ul>
             )}
           </div>
-
+          )}
           {/* Department Risk Breakdown */}
+          {permissions.includes("view_department_analytics") && (
           <div className="insight-card">
             <p className="insight-card-header">Click Rate by Department</p>
             {deptRisk.length === 0 ? (
@@ -271,13 +301,14 @@ export default function Analytics() {
               </ResponsiveContainer>
             )}
           </div>
-
+          )}
         </div>
 
         {/* End sticky charts section */}
         </div>
-
+        )}
         {/* Campaign table */}
+        {permissions.includes("view_campaigns") ? (
         <div style={{ marginTop: "40px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "12px" }}>
             <h2 style={{ margin: 0 }}>Past Campaigns</h2>
@@ -379,6 +410,11 @@ export default function Analytics() {
             </tbody>
           </table>
         </div>
+        ) : (
+        <p style={{ color: "#aaa", marginTop: "20px" }}>
+          You don’t have permission to view campaigns.
+        </p>
+      )}
       </div>
     </div>
   );

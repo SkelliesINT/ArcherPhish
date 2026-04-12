@@ -24,6 +24,12 @@ app.use(express.json());
 
 const prisma = new PrismaClient();
 
+const { authenticateToken, requirePermission, requireAnyPermission} = require("./middleware");
+
+if (!process.env.JWT_SECRET) {
+  throw new Error("JWT_SECRET not defined in environment variables");
+}
+
 // ------------------------------
 // MySQL Connection Pool
 // ------------------------------
@@ -74,39 +80,70 @@ app.post("/api/register", async (req, res) => {
 
 app.post("/api/login", async (req, res) => {
   const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ error: "Email and password required" });
-  }
+  if (!email || !password) return res.status(400).json({ error: "Email and password required" });
 
   try {
-    // Find the user by email
+    // Fetch the user and their roles & permissions
     const user = await prisma.users.findUnique({
       where: { email },
-      select: { id: true, email: true, password: true, role: true },
+      select: {
+        id: true,
+        email: true,
+        password: true,
+        user_roles: {
+          select: {
+            role: {
+              select: {
+                name: true,
+                role_permissions: {
+                  select: {
+                    permission: {
+                      select: { name: true }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     });
 
-    if (!user) {
-      return res.status(401).json({ error: "Invalid credentials" });
-    }
+    if (!user) return res.status(401).json({ error: "Invalid credentials" });
 
-    // Compare password
     const match = await bcrypt.compare(password, user.password);
-    if (!match) {
-      return res.status(401).json({ error: "Invalid credentials" });
+    if (!match) return res.status(401).json({ error: "Invalid credentials" });
+
+    const roles = user.user_roles.map(ur => ur.role.name);
+
+    const permissions = user.user_roles.flatMap(ur =>
+      ur.role.role_permissions.map(rp => rp.permission.name)
+    );
+
+    // Update users.roles column (optional, for convenience in the DB)
+    const rolesString = roles.join(",");
+    if (user.roles !== rolesString) {
+      await prisma.users.update({
+        where: { id: user.id },
+        data: { roles: rolesString },
+      });
     }
 
-    // Generate JWT token
+    // Build user object for frontend
+    const frontendUser = {
+      id: user.id,
+      email: user.email,
+      roles,        // array of role names
+      permissions,  // array of permission names
+    };
+
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role},
+      { id: user.id, email: user.email, roles, permissions },
       process.env.JWT_SECRET || "supersecretkey",
       { expiresIn: "1h" }
     );
 
-    res.json({
-      message: "Login successful",
-      token,
-      user: { id: user.id, email: user.email, role: user.role},
-    });
+    res.json({ token, user: frontendUser });
   } catch (err) {
     console.error("Login error:", err);
     res.status(500).json({ error: "Database error" });
@@ -114,24 +151,18 @@ app.post("/api/login", async (req, res) => {
 });
 
 // Dashboard (protected)
-app.get("/api/dashboard", (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).json({ error: "Missing token" });
-
-  const token = authHeader.split(" ")[1];
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "supersecretkey");
-    res.json({ message: "Welcome back!", user: decoded });
-  } catch (err) {
-    res.status(401).json({ error: "Invalid token" });
-  }
+app.get("/api/dashboard", authenticateToken, (req, res) => {
+  res.json({
+    message: "Welcome back!",
+    user: req.user
+  });
 });
 
 // =====================================================
 // RECIPIENTS
 // =====================================================
 
-app.post("/api/recipients", async (req, res) => {
+app.post("/api/recipients", authenticateToken, requirePermission("manage_recipients"), async (req, res) => {
   const { firstName, lastName, email, department, jobTitle, highRisk, osintData } = req.body;
   if (!email) return res.status(400).json({ error: "Email is required" });
 
@@ -156,7 +187,7 @@ app.post("/api/recipients", async (req, res) => {
   }
 });
 
-app.get("/api/recipients", async (req, res) => {
+app.get("/api/recipients", authenticateToken, requirePermission("view_recipients"), async (req, res) => {
   try {
     const [rows] = await db.query(`
       SELECT id, first_name AS firstName, last_name AS lastName,
@@ -175,7 +206,7 @@ app.get("/api/recipients", async (req, res) => {
   }
 });
 
-app.delete("/api/recipients/:id", async (req, res) => {
+app.delete("/api/recipients/:id", authenticateToken, requirePermission("manage_recipients"), async (req, res) => {
   const { id } = req.params;
 
   try {
@@ -190,7 +221,8 @@ app.delete("/api/recipients/:id", async (req, res) => {
   }
 });
 
-app.put("/api/recipients/:id", async (req, res) => {
+app.put("/api/recipients/:id", authenticateToken,
+  requirePermission("manage_recipients"), async (req, res) => {
   const { id } = req.params;
   const { firstName, lastName, email, department, jobTitle, highRisk, osintData } = req.body;
   if (!email) return res.status(400).json({ error: "Email required" });
@@ -215,7 +247,8 @@ app.put("/api/recipients/:id", async (req, res) => {
   }
 });
 
-app.patch("/api/recipients/:id/high-risk", async (req, res) => {
+app.patch("/api/recipients/:id/high-risk", authenticateToken,
+  requirePermission("manage_recipients"), async (req, res) => {
   const { id } = req.params;
   try {
     await db.query(`UPDATE recipients SET high_risk = NOT high_risk WHERE id=?`, [parseInt(id)]);
@@ -234,7 +267,8 @@ app.patch("/api/recipients/:id/high-risk", async (req, res) => {
 // DEPARTMENTS
 // =====================================================
 
-app.get("/api/departments", async (req, res) => {
+app.get("/api/departments", authenticateToken,
+  requirePermission("view_recipients"), async (req, res) => {
   try {
     const [rows] = await db.query(`
       SELECT name FROM departments
@@ -250,7 +284,8 @@ app.get("/api/departments", async (req, res) => {
   }
 });
 
-app.post("/api/departments", async (req, res) => {
+app.post("/api/departments", authenticateToken,
+  requirePermission("manage_recipients"), async (req, res) => {
   const { name } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: "Department name required" });
   try {
@@ -269,7 +304,9 @@ app.post("/api/departments", async (req, res) => {
 const upload = multer({ storage: multer.memoryStorage() });
 
 // POST /api/recipients/import - Upload and parse CSV
-app.post("/api/recipients/import", upload.single("file"), async (req, res) => {
+app.post("/api/recipients/import",
+  authenticateToken,
+  requirePermission("manage_recipients"), upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
   try {
@@ -323,7 +360,7 @@ app.post("/api/recipients/import", upload.single("file"), async (req, res) => {
 });
 
 // GET /api/recipients/export - Download recipients with campaign engagement results
-app.get("/api/recipients/export", async (req, res) => {
+app.get("/api/recipients/export", authenticateToken, requirePermission("export_reports"), async (req, res) => {
   try {
     const [rows] = await db.query(`
       SELECT
@@ -385,7 +422,7 @@ app.get("/api/recipients/export", async (req, res) => {
 // CAMPAIGNS
 // =====================================================
 
-app.post("/api/campaigns", async (req, res) => {
+app.post("/api/campaigns", authenticateToken, requirePermission("manage_campaigns"), async (req, res) => {
   const { name, difficulty = "medium" } = req.body;
   if (!name) return res.status(400).json({ error: "Campaign name required" });
 
@@ -408,7 +445,10 @@ app.post("/api/campaigns", async (req, res) => {
   }
 });
 
-app.get("/api/campaigns/:id/recipients", async (req, res) => {
+app.get("/api/campaigns/:id/recipients",
+  authenticateToken,
+  requirePermission("view_campaigns"),
+  requirePermission("view_recipients"), async (req, res) => {
   const { id } = req.params;
   try {
     const [rows] = await db.query(`
@@ -439,7 +479,7 @@ app.get("/api/campaigns/:id/recipients", async (req, res) => {
   }
 });
 
-app.get("/api/campaigns", async (req, res) => {
+app.get("/api/campaigns", authenticateToken, requirePermission("view_campaigns"), async (req, res) => {
   try {
     const [rows] = await db.query(`
       SELECT c.id, c.name, c.difficulty, c.created_at,
@@ -466,7 +506,8 @@ function generateTrackingId() {
   return crypto.randomBytes(24).toString("hex"); // 192-bit secure
 }
 
-app.post("/api/campaigns/:campaignId/recipients", async (req, res) => {
+app.post("/api/campaigns/:campaignId/recipients", authenticateToken, 
+  requirePermission("manage_campaigns"), async (req, res) => {
   const { firstName = "", lastName = "", email } = req.body;
   const { campaignId } = req.params;
 
@@ -529,7 +570,8 @@ function genId(length = 6) { return crypto.randomBytes(Math.ceil(length * 3 / 4)
 function hashIp(ip) { return crypto.createHash("sha256").update(ip || "").digest("hex"); }
 function getClientIp(req) { const forwarded = req.headers["x-forwarded-for"]; if (forwarded) return forwarded.split(",")[0].trim(); return req.socket.remoteAddress || ""; }
 
-app.post("/api/links", async (req, res) => {
+app.post("/api/links", authenticateToken,
+requireAnyPermission(["manage_campaigns", "view_all_analytics"]), async (req, res) => {
   const { url, name } = req.body;
   if (!url) return res.status(400).json({ error: "url required" });
 
@@ -605,7 +647,9 @@ app.get("/r/:linkId", async (req, res) => {
 // =====================================================
 
 // Top 5 most-clicked recipients across all campaigns
-app.get("/api/analytics/at-risk", async (req, res) => {
+app.get("/api/analytics/at-risk",
+  authenticateToken,
+  requirePermission("view_at_risk_analytics"), async (req, res) => {
   try {
     const [rows] = await db.query(`
       SELECT
@@ -632,7 +676,9 @@ app.get("/api/analytics/at-risk", async (req, res) => {
 });
 
 // Click rate broken down by department
-app.get("/api/analytics/department-risk", async (req, res) => {
+app.get("/api/analytics/department-risk",
+  authenticateToken,
+  requirePermission("view_department_analytics"), async (req, res) => {
   try {
     const [rows] = await db.query(`
       SELECT
@@ -655,7 +701,8 @@ app.get("/api/analytics/department-risk", async (req, res) => {
 });
 
 // Unified analytics: check flat-file first, then DB
-app.get("/api/analytics/:linkId", async (req, res) => {
+app.get("/api/analytics/:linkId", authenticateToken,
+  requirePermission("view_all_analytics"), async (req, res) => {
   const { linkId } = req.params;
 
   // --- Flat-file first ---
@@ -748,9 +795,11 @@ app.get("/api/analytics/:linkId", async (req, res) => {
   }
 });
 
-app.get("/api/links", (req, res) => { res.json(loadLinks()); });
+app.get("/api/links", authenticateToken,
+requireAnyPermission(["create_campaign","view_all_analytics"]), (req, res) => { res.json(loadLinks()); });
 
-app.delete("/api/links/:linkId", (req, res) => {
+app.delete("/api/links/:linkId", authenticateToken,
+  requirePermission("create_campaign"), (req, res) => {
   const { linkId } = req.params;
   const links = loadLinks();
 
@@ -803,7 +852,9 @@ registerSendHighRiskCampaignRoute(app, db);
 // SETTINGS
 // =====================================================
 
-app.get("/api/settings", async (_req, res) => {
+app.get("/api/settings",
+  authenticateToken,
+  requireAnyPermission(["view_campaigns", "view_recipients"]), async (_req, res) => {
   try {
     const [[row]] = await db.query("SELECT company_name FROM settings WHERE id = 1");
     res.json({ companyName: row ? row.company_name : "" });
@@ -813,7 +864,8 @@ app.get("/api/settings", async (_req, res) => {
   }
 });
 
-app.put("/api/settings", async (req, res) => {
+app.put("/api/settings", authenticateToken,
+  requirePermission("modify_system_settings"), async (req, res) => {
   try {
     const { companyName = "" } = req.body || {};
     await db.query(

@@ -2,6 +2,7 @@
 // Registers POST /api/send-campaign which sends the provided simulatedEmail to recipients in DB
 const nodemailer = require('nodemailer');
 const pLimit = require('p-limit');
+const { authenticateToken, requirePermission } = require("./middleware");
 
 
 module.exports = function registerSendCampaignRoute(app, db, prisma) {
@@ -59,7 +60,7 @@ module.exports = function registerSendCampaignRoute(app, db, prisma) {
     return { from, subject, body };
   }
 
-  app.post('/api/send-campaign', async (req, res) => {
+  app.post('/api/send-campaign', authenticateToken, requirePermission("send_campaigns"), async (req, res) => {
     try {
       const { simulatedEmail, testOnly, departments, redirectTo } = req.body || {};
 
