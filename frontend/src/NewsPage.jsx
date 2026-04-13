@@ -1,6 +1,7 @@
 // frontend/src/NewsPage.jsx
 import React, { useEffect, useState } from "react";
 import Sidebar from "./Sidebar";
+import { API_BASE } from './config';
 import "./Dashboard.css";
 import "./NewsPage.css";
 
@@ -9,7 +10,7 @@ export default function NewsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("http://localhost:4000/api/news?q=phishing")
+    fetch(`${API_BASE}/api/news?q=phishing`)
       .then((res) => res.json())
       .then((data) => {
         setArticles(data);

@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
+import { API_BASE } from './config';
 import "./Login.css"; // Reuse same styles
 
 export default function Register() {
@@ -17,7 +18,7 @@ export default function Register() {
     setError("");
 
     try {
-      const res = await axios.post("http://localhost:4000/api/register", { email, password });
+      const res = await axios.post(`${API_BASE}/api/register`, { email, password });
       setMessage("Registration successful! You can now log in.");
     } catch (err) {
       setError(err.response?.data?.error || "Registration failed");

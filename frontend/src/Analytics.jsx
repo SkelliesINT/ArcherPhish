@@ -16,6 +16,7 @@ import {
 import "./Dashboard.css";
 import "./index.css";
 import "./Analytics.css";
+import { API_BASE } from './config';
 
 function parseUA(ua) {
   if (!ua) return "—";
@@ -61,7 +62,7 @@ export default function Analytics() {
   const [deptRisk, setDeptRisk] = useState([]);
 
   const fetchCampaigns = () => {
-    fetch("http://localhost:4000/api/campaigns")
+    fetch(`${API_BASE}/api/campaigns`)
       .then(res => res.json())
       .then(data => {
         setCampaigns(data);
@@ -72,14 +73,14 @@ export default function Analytics() {
   useEffect(() => { fetchCampaigns(); }, []);
 
   useEffect(() => {
-    fetch("http://localhost:4000/api/analytics/at-risk")
+    fetch(`${API_BASE}/api/analytics/at-risk`)
       .then(res => res.json())
       .then(data => setAtRisk(Array.isArray(data) ? data : []))
       .catch(err => console.error("Failed to load at-risk:", err));
   }, []);
 
   useEffect(() => {
-    fetch("http://localhost:4000/api/analytics/department-risk")
+    fetch(`${API_BASE}/api/analytics/department-risk`)
       .then(res => res.json())
       .then(data => setDeptRisk(Array.isArray(data) ? data : []))
       .catch(err => console.error("Failed to load dept risk:", err));
@@ -94,7 +95,7 @@ export default function Analytics() {
     if (recipientsCache[campaignId]) return;
     setLoadingRecipients(true);
     try {
-      const res = await fetch(`http://localhost:4000/api/campaigns/${campaignId}/recipients`);
+      const res = await fetch(`${API_BASE}/api/campaigns/${campaignId}/recipients`);
       const data = await res.json();
       setRecipientsCache(prev => ({ ...prev, [campaignId]: data }));
     } catch (err) {

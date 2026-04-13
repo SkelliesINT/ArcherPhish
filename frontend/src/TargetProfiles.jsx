@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import Sidebar from "./Sidebar";
+import { API_BASE } from './config';
 import "./Dashboard.css";
 import "./TargetProfiles.css";
 
@@ -155,7 +156,7 @@ export default function TargetProfiles() {
 
   const fetchCompanyName = async () => {
     try {
-      const res = await axios.get("http://localhost:4000/api/settings");
+      const res = await axios.get(`${API_BASE}/api/settings`);
       setCompanyName(res.data.companyName || "");
       setCompanyInput(res.data.companyName || "");
     } catch (err) {
@@ -166,7 +167,7 @@ export default function TargetProfiles() {
   const handleSaveCompany = async () => {
     setCompanySaving(true);
     try {
-      await axios.put("http://localhost:4000/api/settings", { companyName: companyInput.trim() });
+      await axios.put(`${API_BASE}/api/settings`, { companyName: companyInput.trim() });
       setCompanyName(companyInput.trim());
     } catch (err) {
       console.error("Failed to save company name:", err);
@@ -178,7 +179,7 @@ export default function TargetProfiles() {
   // Fetch departments
   const fetchDepartments = async () => {
     try {
-      const res = await axios.get("http://localhost:4000/api/departments");
+      const res = await axios.get(`${API_BASE}/api/departments`);
       setDepartments(res.data);
     } catch (err) {
       console.error("Failed to load departments:", err);
@@ -188,7 +189,7 @@ export default function TargetProfiles() {
   // Fetch recipients
   const fetchRecipients = async () => {
     try {
-      const res = await axios.get("http://localhost:4000/api/recipients", {
+      const res = await axios.get(`${API_BASE}/api/recipients`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setRecipients(res.data);
@@ -209,7 +210,7 @@ export default function TargetProfiles() {
     const trimmed = name.trim();
     if (!trimmed) return;
     try {
-      await axios.post("http://localhost:4000/api/departments", { name: trimmed });
+      await axios.post(`${API_BASE}/api/departments`, { name: trimmed });
       setDepartments((prev) => [...new Set([...prev, trimmed])].sort());
       onSuccess(trimmed);
     } catch (err) {
@@ -225,7 +226,7 @@ export default function TargetProfiles() {
 
     try {
       const res = await axios.post(
-        "http://localhost:4000/api/recipients",
+        `${API_BASE}/api/recipients`,
         {
           firstName: newFirstName,
           lastName: newLastName,
@@ -254,7 +255,7 @@ export default function TargetProfiles() {
   // Delete recipient
   const handleDelete = async (id) => {
     try {
-      await axios.delete(`http://localhost:4000/api/recipients/${id}`, {
+      await axios.delete(`${API_BASE}/api/recipients/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setRecipients((prev) => prev.filter((r) => r.id !== id));
@@ -283,7 +284,7 @@ export default function TargetProfiles() {
   const handleEditSave = async () => {
     try {
       const res = await axios.put(
-        `http://localhost:4000/api/recipients/${editingId}`,
+        `${API_BASE}/api/recipients/${editingId}`,
         {
           ...editFields,
           osintData: editFields.highRisk ? editFields.osintData : null,
@@ -306,7 +307,7 @@ export default function TargetProfiles() {
     const formData = new FormData();
     formData.append("file", csvFile);
     try {
-      const res = await axios.post("http://localhost:4000/api/recipients/import", formData, {
+      const res = await axios.post(`${API_BASE}/api/recipients/import`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       setMessage(`✅ ${res.data.message}`);
@@ -322,7 +323,7 @@ export default function TargetProfiles() {
 
   // CSV export
   const handleCSVExport = () => {
-    window.location.href = "http://localhost:4000/api/recipients/export";
+    window.location.href = `${API_BASE}/api/recipients/export`;
   };
 
   // Filtered + sorted list

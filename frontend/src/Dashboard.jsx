@@ -8,6 +8,7 @@ import {
 import "./Dashboard.css";
 import "./index.css";
 import Sidebar from "./Sidebar";
+import { API_BASE } from './config';
 
 export default function Dashboard() {
   const [message, setMessage] = useState("Welcome back!");
@@ -38,7 +39,7 @@ export default function Dashboard() {
     }
     setIsLoggedIn(true);
     axios
-      .get("http://localhost:4000/api/dashboard", {
+      .get(`${API_BASE}/api/dashboard`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       .then((res) => setMessage(res.data.message))
@@ -51,7 +52,7 @@ export default function Dashboard() {
 
   // Campaigns: days since last, stats, recent campaign
   useEffect(() => {
-    axios.get("http://localhost:4000/api/campaigns")
+    axios.get(`${API_BASE}/api/campaigns`)
       .then(res => {
         const data = res.data || [];
         setCampaigns(data);
@@ -88,7 +89,7 @@ export default function Dashboard() {
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) return;
-    axios.get("http://localhost:4000/api/recipients", {
+    axios.get(`${API_BASE}/api/recipients`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(res => setTotalRecipients(res.data.length))
@@ -97,7 +98,7 @@ export default function Dashboard() {
 
   // Top phishing news
   useEffect(() => {
-    axios.get("http://localhost:4000/api/news?q=phishing")
+    axios.get(`${API_BASE}/api/news?q=phishing`)
       .then(res => {
         setTopNews(res.data.filter(a => a.image).slice(0, 3));
         setLoadingNews(false);

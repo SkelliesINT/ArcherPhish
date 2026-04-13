@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { API_BASE } from './config';
 import "./Login.css";
 import "./CreateCampaign.css";
 
@@ -70,7 +71,7 @@ export default function CreateCampaign() {
 
   // Fetch company name once on mount
   useEffect(() => {
-    fetch("http://localhost:4000/api/settings")
+    fetch(`${API_BASE}/api/settings`)
       .then(r => r.json())
       .then(data => setCompanyName(data.companyName || ""))
       .catch(() => {});
@@ -79,7 +80,7 @@ export default function CreateCampaign() {
   // Fetch departments when on mass_generic mode
   useEffect(() => {
     if (campaignType !== "mass_generic") return;
-    fetch("http://localhost:4000/api/departments")
+    fetch(`${API_BASE}/api/departments`)
       .then(r => r.json())
       .then(data => {
         const depts = Array.isArray(data) ? data : [];
@@ -94,7 +95,7 @@ export default function CreateCampaign() {
     if (campaignType !== "high_risk_intensive") return;
     setHrLoading(true);
     const token = localStorage.getItem("token");
-    fetch("http://localhost:4000/api/recipients", {
+    fetch(`${API_BASE}/api/recipients`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json())
@@ -122,7 +123,7 @@ export default function CreateCampaign() {
     setLoading(true);
     setGeneratedEmail("");
     try {
-      const res = await fetch("http://localhost:4000/api/generate", {
+      const res = await fetch(`${API_BASE}/api/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt, role, difficulty, tone, companyName, model: "gpt-3.5-turbo" }),
@@ -147,7 +148,7 @@ export default function CreateCampaign() {
     const testOnly = window.confirm("Send test to a single recipient only? (OK = test, Cancel = send to all)");
     const deptPayload = targetMode === "department" ? selectedDepts : undefined;
     try {
-      const res = await fetch("http://localhost:4000/api/send-campaign", {
+      const res = await fetch(`${API_BASE}/api/send-campaign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ simulatedEmail: generatedEmail, testOnly, departments: deptPayload, redirectTo }),
@@ -178,7 +179,7 @@ export default function CreateCampaign() {
     setHrSending(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:4000/api/send-campaign-highRisk", {
+      const res = await fetch(`${API_BASE}/api/send-campaign-highRisk`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
