@@ -13,5 +13,5 @@ This repo will store the code, documentation, and deliverables for Group 55's Ca
     - Other interactions like replies
 
 4. Dashboard/Stats
-    - Statistics of deliveries, opens, clicks, flags, etc
+    - Statistics of deliveries, clicks, flags, etc
     - Display charts (Optional)
